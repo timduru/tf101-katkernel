@@ -162,7 +162,18 @@ struct mmc_card {
 #define MMC_QUIRK_NONSTD_SDIO	(1<<2)		/* non-standard SDIO card attached */
 						/* (missing CIA registers) */
 #define MMC_QUIRK_BROKEN_CLK_GATING (1<<3)	/* clock gating the sdio bus will make card fail */
-#define MMC_QUIRK_INAND_CMD38	(1<<4)		/* iNAND devices have broken CMD38 */
+#define MMC_QUIRK_NONSTD_FUNC_IF (1<<4)		/* SDIO card has nonstd function interfaces */
+#define MMC_QUIRK_DISABLE_CD	(1<<5)		/* disconnect CD/DAT[3] resistor */
+#define MMC_QUIRK_INAND_CMD38	(1<<6)		/* iNAND devices have broken CMD38 */
+#define MMC_QUIRK_BLK_NO_CMD23	(1<<7)		/* Avoid CMD23 for regular multiblock */
+#define MMC_QUIRK_BROKEN_BYTE_MODE_512 (1<<8)	/* Avoid sending 512 bytes in */
+#define MMC_QUIRK_LONG_READ_TIME (1<<9)		/* Data read time > CSD says */
+						/* byte mode */
+	unsigned int    poweroff_notify_state;	/* eMMC4.5 notify feature */
+#define MMC_NO_POWER_NOTIFICATION	0
+#define MMC_POWERED_ON			1
+#define MMC_POWEROFF_SHORT		2
+#define MMC_POWEROFF_LONG		3
 
 	unsigned int		erase_size;	/* erase size in sectors */
  	unsigned int		erase_shift;	/* if erase unit is power 2 */
@@ -311,6 +322,26 @@ static inline int mmc_card_lenient_fn0(const struct mmc_card *c)
 static inline int mmc_blksz_for_byte_mode(const struct mmc_card *c)
 {
 	return c->quirks & MMC_QUIRK_BLKSZ_FOR_BYTE_MODE;
+}
+
+static inline int mmc_card_disable_cd(const struct mmc_card *c)
+{
+	return c->quirks & MMC_QUIRK_DISABLE_CD;
+}
+
+static inline int mmc_card_nonstd_func_interface(const struct mmc_card *c)
+{
+	return c->quirks & MMC_QUIRK_NONSTD_FUNC_IF;
+}
+
+static inline int mmc_card_broken_byte_mode_512(const struct mmc_card *c)
+{
+	return c->quirks & MMC_QUIRK_BROKEN_BYTE_MODE_512;
+}
+
+static inline int mmc_card_long_read_time(const struct mmc_card *c)
+{
+	return c->quirks & MMC_QUIRK_LONG_READ_TIME;
 }
 
 #define mmc_card_name(c)	((c)->cid.prod_name)
