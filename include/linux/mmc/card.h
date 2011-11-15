@@ -152,8 +152,10 @@ struct mmc_card {
 #define MMC_STATE_HIGHSPEED	(1<<2)		/* card is in high speed mode */
 #define MMC_STATE_BLOCKADDR	(1<<3)		/* card uses block-addressing */
 #define MMC_STATE_HIGHSPEED_DDR (1<<4)		/* card is in high speed mode */
-#define MMC_STATE_DOING_BKOPS	(1 << 5)	/* Card doing bkops */
-#define MMC_STATE_NEED_BKOPS	(1 << 6)	/* Card needs to do bkops */
+#define MMC_STATE_ULTRAHIGHSPEED (1<<5)         /* card is in ultra high speed mode */
+#define MMC_STATE_DOING_BKOPS  (1 << 6)        /* Card doing bkops */
+#define MMC_STATE_NEED_BKOPS   (1 << 7)        /* Card needs to do bkops */
+
 
 	unsigned int		quirks; 	/* card quirks */
 #define MMC_QUIRK_LENIENT_FN0	(1<<0)		/* allow SDIO FN0 writes outside of the VS CCCR range */
@@ -302,6 +304,9 @@ static inline void __maybe_unused remove_quirk(struct mmc_card *card, int data)
 #define mmc_card_ddr_mode(c)	((c)->state & MMC_STATE_HIGHSPEED_DDR)
 #define mmc_card_doing_bkops(c) ((c)->state & MMC_STATE_DOING_BKOPS)
 #define mmc_card_need_bkops(c) ((c)->state & MMC_STATE_NEED_BKOPS)
+#define mmc_card_uhs(c)		((c)->state & MMC_STATE_ULTRAHIGHSPEED)
+#define mmc_sd_card_uhs(c)	((c)->state & MMC_STATE_ULTRAHIGHSPEED)
+#define mmc_card_ext_capacity(c) ((c)->state & MMC_CARD_SDXC)
 
 #define mmc_card_set_present(c)	((c)->state |= MMC_STATE_PRESENT)
 #define mmc_card_set_readonly(c) ((c)->state |= MMC_STATE_READONLY)
@@ -310,6 +315,9 @@ static inline void __maybe_unused remove_quirk(struct mmc_card *card, int data)
 #define mmc_card_set_ddr_mode(c) ((c)->state |= MMC_STATE_HIGHSPEED_DDR)
 #define mmc_card_set_doing_bkops(c) ((c)->state |= MMC_STATE_DOING_BKOPS)
 #define mmc_card_set_need_bkops(c) ((c)->state |= MMC_STATE_NEED_BKOPS)
+#define mmc_card_set_uhs(c) ((c)->state |= MMC_STATE_ULTRAHIGHSPEED)
+#define mmc_sd_card_set_uhs(c) ((c)->state |= MMC_STATE_ULTRAHIGHSPEED)
+#define mmc_card_set_ext_capacity(c) ((c)->state |= MMC_CARD_SDXC)
 
 #define mmc_card_clr_doing_bkops(c) ((c)->state &= ~MMC_STATE_DOING_BKOPS)
 #define mmc_card_clr_need_bkops(c) ((c)->state &= ~MMC_STATE_NEED_BKOPS)
