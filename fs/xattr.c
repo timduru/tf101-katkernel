@@ -329,7 +329,7 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 	error = mnt_want_write_file(f);
 	if (!error) {
 		error = setxattr(dentry, name, value, size, flags);
-		mnt_drop_write(f->f_path.mnt);
+		mnt_drop_write_file(f);
 	}
 	fput(f);
 	return error;
@@ -556,7 +556,7 @@ SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
 	error = mnt_want_write_file(f);
 	if (!error) {
 		error = removexattr(dentry, name);
-		mnt_drop_write(f->f_path.mnt);
+		mnt_drop_write_file(f);
 	}
 	fput(f);
 	return error;
