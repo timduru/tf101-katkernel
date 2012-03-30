@@ -12,15 +12,22 @@ config BCMDHD
 
 config BCMDHD_FW_DIR
 	depends on BCMDHD
-	string "Firmware path"
+	string "Firmware directory"
 	default "/system/vendor/firmware"
 	---help---
 	  Path to the firmware file.
 
 config BCMDHD_NVRAM_DIR
 	depends on BCMDHD
-	string "NVRAM path"
+	string "NVRAM directory"
 	default "/system/etc"
+	---help---
+	  Path to the calibration file.
+
+config BCMDHD_NVRAM_PATH
+	depends on BCMDHD
+	string "NVRAM path"
+	default "/system/etc/nvram.txt"
 	---help---
 	  Path to the calibration file.
 
@@ -31,6 +38,13 @@ config BCMDHD_WEXT
 	select WEXT_PRIV
 	help
 	  Enables WEXT support
+
+config DHD_USE_STATIC_BUF
+	bool "Enable memory preallocation"
+	depends on BCMDHD
+	default n
+	---help---
+	  Use memory preallocated in platform
 
 config BCMDHD_WIFI_CONTROL_FUNC
 	bool "Use bcmdhd_wlan device"

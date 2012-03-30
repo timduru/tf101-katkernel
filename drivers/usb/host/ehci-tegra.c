@@ -478,7 +478,9 @@ static int tegra_usb_resume(struct usb_hcd *hcd, bool is_dpd)
 	if ((tegra->port_speed > TEGRA_USB_PHY_PORT_SPEED_HIGH) || (hsic) ||
 	    (null_ulpi))
 		goto restart;
-
+/* Add for the modem port of ulpi. When the phy resume from LP0
+ * USB register will be reset.*/
+if (!readl(&hw->async_next) || (tegra->phy->instance != 1)) {
 	/* Force the phy to keep data lines in suspend state */
 	tegra_ehci_phy_restore_start(tegra->phy, tegra->port_speed);
 
@@ -570,7 +572,7 @@ static int tegra_usb_resume(struct usb_hcd *hcd, bool is_dpd)
 	}
 
 	tegra_ehci_phy_restore_end(tegra->phy);
-
+}
 	pr_info("%s-\n", __func__);
 
 	return 0;
@@ -598,7 +600,7 @@ restart:
 		return 0;
 	}
 
-	if ((tegra->port_speed <= TEGRA_USB_PHY_PORT_SPEED_HIGH) && (!hsic))
+	if (((tegra->port_speed <= TEGRA_USB_PHY_PORT_SPEED_HIGH) && (!hsic)) || (tegra->phy->instance == 1))
 		tegra_ehci_phy_restore_end(tegra->phy);
 	if (hsic) {
 		val = readl(&hw->port_status[0]);

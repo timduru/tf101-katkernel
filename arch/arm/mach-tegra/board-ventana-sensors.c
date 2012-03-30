@@ -58,6 +58,7 @@
 #include <mach/board-ventana-misc.h>
 
 #define LIGHT_IRQ_GPIO		TEGRA_GPIO_PZ2
+#define PROX_IRQ_GPIO		TEGRA_GPIO_PG0
 #define AKM8975_IRQ_GPIO	TEGRA_GPIO_PN5
 #define CAMERA_POWER_GPIO	TEGRA_GPIO_PK3
 #define CAMERA_CSI_MUX_SEL_GPIO	TEGRA_GPIO_PBB4
@@ -742,6 +743,15 @@ static const struct i2c_board_info light_i2c1_board_info[] = {
 #endif
 };
 
+#ifdef CONFIG_SENSORS_PROX_LDS6202
+static const struct i2c_board_info proximity_i2c1_board_info[] = {
+	{
+		I2C_BOARD_INFO("prox_lds6202", 0x2c),
+		.irq = TEGRA_GPIO_TO_IRQ(PROX_IRQ_GPIO),
+	},
+};
+#endif
+
 int __init ventana_sensors_init(void)
 {
 	struct board_info BoardInfo;
@@ -768,6 +778,11 @@ int __init ventana_sensors_init(void)
 
 	i2c_register_board_info(2, light_i2c1_board_info,
 		ARRAY_SIZE(light_i2c1_board_info));
+
+#ifdef CONFIG_SENSORS_PROX_LDS6202
+	i2c_register_board_info(2, proximity_i2c1_board_info,
+		ARRAY_SIZE(proximity_i2c1_board_info));
+#endif
 
 #ifdef CONFIG_TORCH_SSL3250A
 	i2c_register_board_info(3, ventana_i2c3_board_info_ssl3250a,

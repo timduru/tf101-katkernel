@@ -164,7 +164,7 @@ extern int osl_error(int bcmerror);
 
 
 #define OSL_SYSUPTIME()		((uint32)jiffies * (1000 / HZ))
-#define	printf(fmt, args...)	printk(fmt , ## args)
+#define	printf(fmt, args...)	printk("[DHD] "fmt, ## args) //printk(fmt , ## args)
 #include <linux/kernel.h>	
 #include <linux/string.h>	
 
@@ -268,7 +268,7 @@ extern int osl_error(int bcmerror);
 #define PKTLIST_DUMP(osh, buf)
 #define PKTDBG_TRACE(osh, pkt, bit)
 #define	PKTFREE(osh, skb, send)		osl_pktfree((osh), (skb), (send))
-#ifdef DHD_USE_STATIC_BUF
+#ifdef CONFIG_DHD_USE_STATIC_BUF
 #define	PKTGET_STATIC(osh, len, send)		osl_pktget_static((osh), (len))
 #define	PKTFREE_STATIC(osh, skb, send)		osl_pktfree_static((osh), (skb), (send))
 #endif

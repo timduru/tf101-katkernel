@@ -170,6 +170,12 @@ config INPUT_KEYRESET
 	  To compile this driver as a module, choose M here: the
 	  module will be called keyreset.
 
+config SENSORS_PROX_LDS6202
+    tristate "IDT Proximity Sensor Driver LDS6202"
+    depends on I2C
+    help
+      This enables support for Proximity sensor over I2C based sensors.
+
 config ASUSEC
         bool "ASUS embedded controller interface"
         depends on I2C

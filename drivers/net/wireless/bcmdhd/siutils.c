@@ -46,6 +46,7 @@
 
 #include "siutils_priv.h"
 
+int chip_is_b1 = 0;
 /* local prototypes */
 static si_info_t *si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
                               uint bustype, void *sdh, char **vars, uint *varsz);
@@ -357,6 +358,16 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 	/* Might as wll fill in chip id rev & pkg */
 	sih->chip = w & CID_ID_MASK;
 	sih->chiprev = (w & CID_REV_MASK) >> CID_REV_SHIFT;
+	printf("sih->chiprev = %d\n", sih->chiprev);
+	if (CHIPID(sih->chip) == BCM4330_CHIP_ID){
+		if (sih->chiprev == 3) {
+			chip_is_b1 = 1;
+			printf("BCM4330B1 found!\n");
+		} else
+			printf("BCM4330B2 found!\n");
+	}else if (CHIPID(sih->chip) == BCM4329_CHIP_ID){
+			printf("BCM4329 found!\n");
+	}
 	sih->chippkg = (w & CID_PKG_MASK) >> CID_PKG_SHIFT;
 	if (CHIPID(sih->chip) == BCM4322_CHIP_ID && (((sih->chipst & CST4322_SPROM_OTP_SEL_MASK)
 		>> CST4322_SPROM_OTP_SEL_SHIFT) == (CST4322_OTP_PRESENT |

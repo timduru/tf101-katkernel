@@ -1,0 +1,4 @@
+config RIL
+	tristate "The RIL driver"
+	help
+		A simple RIL driver to listen or control the GPIO of RIL.

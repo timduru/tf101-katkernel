@@ -32,6 +32,7 @@
 #include <linux/init.h>
 #include <linux/jiffies.h>
 #include <linux/slab.h>
+#include <linux/wakelock.h>
 #include <asm/unaligned.h>
 #include <asm/uaccess.h>
 #include <asm/string.h>
@@ -83,11 +84,30 @@ struct asyncppp {
 #define SC_TOSS		1
 #define SC_ESCAPE	2
 #define SC_PREV_ERROR	4
+#ifdef CONFIG_DEBUG_ASUS
+#define virtual_detect_attr(_name) \
+static struct kobj_attribute _name##_attr = {   \
+    .attr   = {             \
+    .name = __stringify(_name), \
+        .mode = 0660,           \
+    },                  \
+    .show   = _name##_show,         \
+    .store  = _name##_store,        \
+}
 
+#define LOG_DETECT                     "log_detect"
+#define STR_TURN_ON                    "on"
+#define STR_TURN_OFF                   "off"
+int logActivate;
+static struct kobject *log_kobj;
+#endif /*def CONFIG_DEBUG_ASUS*/
 /* Bits in rbits */
 #define SC_RCV_BITS	(SC_RCV_B7_1|SC_RCV_B7_0|SC_RCV_ODDP|SC_RCV_EVNP)
 
 static int flag_time = HZ;
+static struct wake_lock ppp_rxwake; /* PPP rx wakelock */
+static struct wake_lock ppp_closewake;
+
 module_param(flag_time, int, 0);
 MODULE_PARM_DESC(flag_time, "ppp_async: interval between flagged packets (in clock ticks)");
 MODULE_LICENSE("GPL");
@@ -242,6 +262,10 @@ ppp_asynctty_close(struct tty_struct *tty)
 	skb_queue_purge(&ap->rqueue);
 	kfree_skb(ap->tpkt);
 	kfree(ap);
+	// This is to let user space be notified about ppp closure
+	printk( KERN_INFO "[PPP] Holding 3 secs wakelock for ppp close\n");
+	wake_lock_timeout(&ppp_closewake, 3 * HZ);
+
 }
 
 /*
@@ -386,17 +410,83 @@ static struct tty_ldisc_ops ppp_ldisc = {
 	.receive_buf = ppp_asynctty_receive,
 	.write_wakeup = ppp_asynctty_wakeup,
 };
+#ifdef CONFIG_DEBUG_ASUS
+static ssize_t log_enabled_show( struct kobject *kobj, struct kobj_attribute *attr, char *buf ) {
+
+       char *s = buf;
+       if( logActivate>0 ) {
+               s += sprintf( s, STR_TURN_ON"\n" );
+       }
+       else {
+               s += sprintf( s, STR_TURN_OFF"\n" );
+       }
+       return (s - buf);
+}
+static ssize_t log_enabled_store( struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count ) {
+
+       if( (count >= strlen( STR_TURN_ON )) && (strncmp( buf, STR_TURN_ON, strlen( STR_TURN_ON ) ) == 0) ) {
+               logActivate = 1;
+               return count;
+       }
+
+       if( (count >= strlen( STR_TURN_OFF )) && (strncmp( buf, STR_TURN_OFF, strlen( STR_TURN_OFF ) ) == 0) ) {
+               logActivate = 0;
+               return count;
+       }
+
+       printk( KERN_INFO "wifi_enabled_store: Invalid argument\n" );
+       return -EINVAL;
+}
+
+virtual_detect_attr( log_enabled );
+static struct attribute *attr_list[] = {
+
+       &log_enabled_attr.attr,
+       NULL,
+};
+static struct attribute_group attr_group = {
+
+       .attrs = attr_list,
+};
+#endif /*def CONFIG_DEBUG_ASUS*/
 
 static int __init
 ppp_async_init(void)
 {
 	int err;
+#ifdef CONFIG_DEBUG_ASUS
+	int ret;
+       logActivate = 0;
+       log_kobj = kobject_create_and_add( LOG_DETECT, NULL );
+       if( !log_kobj ) {
 
+               printk( KERN_ERR "virtual_detect_init: cannot create kobject\n" );
+               return -ENOMEM;
+       }
+
+       // Register kobj_attribute
+       ret = sysfs_create_group( log_kobj, &attr_group );
+       if( ret ) {
+
+               printk( KERN_ERR "virtual_detect_init: cannot create group\n" );
+               ret = -ENOMEM;
+               goto ErrExit;
+       }
+
+       printk( KERN_INFO "PPP Log initialized\n" );
+#endif /*def CONFIG_DEBUG_ASUS*/
+	wake_lock_init(&ppp_rxwake, WAKE_LOCK_SUSPEND, "ppp_rxwake");
+	wake_lock_init(&ppp_closewake, WAKE_LOCK_SUSPEND, "ppp_closewake");
 	err = tty_register_ldisc(N_PPP, &ppp_ldisc);
 	if (err != 0)
 		printk(KERN_ERR "PPP_async: error %d registering line disc.\n",
 		       err);
 	return err;
+#ifdef CONFIG_DEBUG_ASUS
+ErrExit:
+       kobject_del( log_kobj );
+       return 0;
+#endif /*def CONFIG_DEBUG_ASUS*/
 }
 
 /*
@@ -680,6 +770,12 @@ ppp_async_push(struct asyncppp *ap)
 			continue;
 		}
 		if (ap->optr >= ap->olim && ap->tpkt) {
+#ifdef CONFIG_DEBUG_ASUS
+			if(logActivate>0)
+			{
+				printk("=> %d\n",ap->tpkt->len+14);
+			}
+#endif /*def CONFIG_DEBUG_ASUS*/
 			if (ppp_async_encode(ap)) {
 				/* finished processing ap->tpkt */
 				clear_bit(XMIT_FULL, &ap->xmit_flags);
@@ -783,6 +879,13 @@ process_input_packet(struct asyncppp *ap)
 	len = skb->len;
 	if (len < 3)
 		goto err;	/* too short */
+
+#ifdef CONFIG_DEBUG_ASUS
+	if(logActivate>0)
+	{
+		printk("<= %d\n",len+13);
+	}
+#endif /*def CONFIG_DEBUG_ASUS*/
 	fcs = PPP_INITFCS;
 	for (; len > 0; --len)
 		fcs = PPP_FCS(fcs, *p++);
@@ -902,6 +1005,8 @@ ppp_async_input(struct asyncppp *ap, const unsigned char *buf,
 			}
 		}
 
+		wake_lock_timeout(&ppp_rxwake, HZ);
+
 		if (n >= count)
 			break;
 
@@ -1019,6 +1124,11 @@ static void async_lcp_peek(struct asyncppp *ap, unsigned char *data,
 
 static void __exit ppp_async_cleanup(void)
 {
+#ifdef CONFIG_DEBUG_ASUS
+       kobject_del( log_kobj );
+#endif /*def CONFIG_DEBUG_ASUS*/
+	wake_lock_destroy(&ppp_rxwake);
+	wake_lock_destroy(&ppp_closewake);
 	if (tty_unregister_ldisc(N_PPP) != 0)
 		printk(KERN_ERR "failed to unregister PPP line discipline\n");
 }

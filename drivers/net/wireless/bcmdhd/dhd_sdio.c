@@ -345,7 +345,7 @@ static const uint firstread = DHD_FIRSTREAD;
 #define HDATLEN (firstread - (SDPCM_HDRLEN))
 
 /* Retry count for register access failures */
-static const uint retry_limit = 2;
+static const uint retry_limit = 20;
 
 /* Force even SD lengths (some host controllers mess up on odd bytes) */
 static bool forcealign;
@@ -382,7 +382,7 @@ static bool dhd_readahead;
 
 /* To check if there's window offered */
 #define DATAOK(bus) \
-	(((uint8)(bus->tx_max - bus->tx_seq) > 2) && \
+	(((uint8)(bus->tx_max - bus->tx_seq) > 1) && \
 	(((uint8)(bus->tx_max - bus->tx_seq) & 0x80) == 0))
 
 /* To check if there's window offered for ctrl frame */
@@ -398,6 +398,8 @@ do { \
 	do { \
 		regvar = R_REG(bus->dhd->osh, regaddr); \
 	} while (bcmsdh_regfail(bus->sdh) && (++retryvar <= retry_limit)); \
+	if(retryvar > 1)  \
+		DHD_ERROR(("%s: regvar[ %d ], retryvar[ %d ], regfails[ %d ], bcmsdh_regfail[ %d ] \n",__FUNCTION__,regvar, retryvar ,bus->regfails, bcmsdh_regfail(bus->sdh))); \
 	if (retryvar) { \
 		bus->regfails += (retryvar-1); \
 		if (retryvar > retry_limit) { \
@@ -506,6 +508,8 @@ static int dhdsdio_download_code_array(dhd_bus_t *bus);
 #include <htsf.h>
 extern uint32 dhd_get_htsf(void *dhd, int ifidx);
 #endif /* WLMEDIA_HTSF */
+
+extern int chip_is_b1;
 
 static void
 dhd_dongle_setmemsize(struct dhd_bus *bus, int mem_size)
@@ -5736,7 +5740,7 @@ dhdsdio_release_malloc(dhd_bus_t *bus, osl_t *osh)
 		return;
 
 	if (bus->rxbuf) {
-#ifndef DHD_USE_STATIC_BUF
+#ifndef CONFIG_DHD_USE_STATIC_BUF
 		MFREE(osh, bus->rxbuf, bus->rxblen);
 #endif
 		bus->rxctl = bus->rxbuf = NULL;
@@ -5744,7 +5748,7 @@ dhdsdio_release_malloc(dhd_bus_t *bus, osl_t *osh)
 	}
 
 	if (bus->databuf) {
-#ifndef DHD_USE_STATIC_BUF
+#ifndef CONFIG_DHD_USE_STATIC_BUF
 		MFREE(osh, bus->databuf, MAX_DATA_BUF);
 #endif
 		bus->databuf = NULL;
@@ -6083,6 +6087,12 @@ _dhdsdio_download_firmware(struct dhd_bus *bus)
 			}
 		}
 
+		if(chip_is_b1){
+			strcpy(bus->fw_path, "/system/vendor/firmware/bcm4330/fw_bcmdhd_b1.bin");
+		}
+
+		printf("%s: fw_path = %s, nv_path=%s\n", __FUNCTION__, bus->fw_path, bus->nv_path);
+
 		if (dhdsdio_download_code_file(bus, bus->fw_path)) {
 			DHD_ERROR(("%s: dongle image file download failed\n", __FUNCTION__));
 #ifdef BCMEMBEDIMAGE
@@ -6193,6 +6203,12 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 			/* Force flow control as protection when stop come before ifconfig_down */
 			dhd_txflowcontrol(bus->dhd, ALL_INTERFACES, ON);
 #endif /* !defined(IGNORE_ETH0_DOWN) */
+
+#if !defined(OOB_INTR_ONLY)
+			/* to avoid supurious client interrupt during stop process */
+			bcmsdh_stop(bus->sdh);
+#endif /* !defined(OOB_INTR_ONLY) */
+
 			/* Expect app to have torn down any connection before calling */
 			/* Stop the bus, disable F2 */
 			dhd_bus_stop(bus, FALSE);
