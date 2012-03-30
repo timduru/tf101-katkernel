@@ -2002,11 +2002,11 @@ static struct clk tegra_pll_u = {
 };
 
 static struct clk_pll_freq_table tegra_pll_x_freq_table[] = {
-        /* 1.640 GHz */
-        { 12000000, 1640000000, 820, 6, 1, 12},
-        { 13000000, 1640000000, 1009, 8, 1, 12},
-        { 19200000, 1640000000, 1025, 12, 1, 8},
-        { 26000000, 1640000000, 820, 13, 1, 12},
+	/* 1.7 GHz */
+	{ 12000000, 1700000000, 852, 6, 1, 12},
+	{ 13000000, 1700000000, 1049, 8, 1, 12},
+	{ 19200000, 1700000000, 1065, 12, 1, 8},
+	{ 26000000, 1700000000, 852, 13, 1, 12},
 
 	/* 1.6 GHz */
 	{ 12000000, 1600000000, 800, 6, 1, 12},
@@ -2235,7 +2235,7 @@ static struct clk tegra_clk_cclk = {
 	.inputs	= mux_cclk,
 	.reg	= 0x20,
 	.ops	= &tegra_super_ops,
-	.max_rate = 1640000000,
+	.max_rate = 1700000000,
 };
 
 static struct clk tegra_clk_sclk = {
@@ -2251,7 +2251,7 @@ static struct clk tegra_clk_virtual_cpu = {
 	.name      = "cpu",
 	.parent    = &tegra_clk_cclk,
 	.ops       = &tegra_cpu_ops,
-	.max_rate  = 1640000000,
+	.max_rate  = 1700000000,
 	.u.cpu = {
 		.main      = &tegra_pll_x,
 		.backup    = &tegra_pll_p,
@@ -2653,9 +2653,9 @@ static struct tegra_sku_rate_limit sku_limits[] =
 	RATE_LIMIT("cclk",	750000000, 0x07, 0x10),
 	RATE_LIMIT("pll_x",	750000000, 0x07, 0x10),
 
-	RATE_LIMIT("cpu",	1640000000, 0x04, 0x08, 0x0F),
-	RATE_LIMIT("cclk",	1640000000, 0x04, 0x08, 0x0F),
-	RATE_LIMIT("pll_x",	1640000000, 0x04, 0x08, 0x0F),
+	RATE_LIMIT("cpu",	1700000000, 0x04, 0x08, 0x0F),
+	RATE_LIMIT("cclk",	1700000000, 0x04, 0x08, 0x0F),
+	RATE_LIMIT("pll_x",	1700000000, 0x04, 0x08, 0x0F),
 
 	RATE_LIMIT("cpu",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
 	RATE_LIMIT("cclk",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
@@ -2757,7 +2757,7 @@ static struct cpufreq_frequency_table freq_table_1p2GHz[] = {
 	{ 9, CPUFREQ_TABLE_END },
 };
 
-static struct cpufreq_frequency_table freq_table_1p6GHz[] = {
+static struct cpufreq_frequency_table freq_table_1p7GHz[] = {
         { 0, 216000 },
         { 1, 312000 },
         { 2, 456000 },
@@ -2770,7 +2770,7 @@ static struct cpufreq_frequency_table freq_table_1p6GHz[] = {
         { 9, 1400000 },
         { 10, 1504000 },
         { 11, 1600000 },
-        { 12, 1640000 },
+        { 12, 1700000 },
         { 13, CPUFREQ_TABLE_END },
 };
 
@@ -2778,7 +2778,7 @@ static struct tegra_cpufreq_table_data cpufreq_tables[] = {
 	{ freq_table_750MHz, 1, 4 },
 	{ freq_table_1p0GHz, 2, 6 },
 	{ freq_table_1p2GHz, 2, 7 },
-	{ freq_table_1p6GHz, 2, 8 },
+	{ freq_table_1p7GHz, 2, 8 },
 };
 
 struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)
