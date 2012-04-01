@@ -3,7 +3,7 @@
  *
  * CPU complex suspend & resume functions for Tegra SoCs
  *
- * Copyright (c) 2009-2011, NVIDIA Corporation.
+ * Copyright (c) 2009-2012, NVIDIA Corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,10 +41,10 @@
 #include <linux/vmalloc.h>
 #include <linux/memblock.h>
 #include <linux/console.h>
+#include <linux/pm_qos_params.h>
 
 #include <asm/cacheflush.h>
 #include <asm/cpu_pm.h>
-#include <asm/hardware/cache-l2x0.h>
 #include <asm/hardware/gic.h>
 #include <asm/localtimer.h>
 #include <asm/pgalloc.h>
@@ -171,18 +171,14 @@ struct suspend_context tegra_sctx;
 #define MC_SECURITY_SIZE	0x70
 #define MC_SECURITY_CFG2	0x7c
 
+#define AWAKE_CPU_FREQ_MIN	100000
+static struct pm_qos_request_list awake_cpu_freq_req;
+
 struct dvfs_rail *tegra_cpu_rail;
 static struct dvfs_rail *tegra_core_rail;
 static struct clk *tegra_pclk;
 static const struct tegra_suspend_platform_data *pdata;
 static enum tegra_suspend_mode current_suspend_mode = TEGRA_SUSPEND_NONE;
-
-static const char *tegra_suspend_name[TEGRA_MAX_SUSPEND_MODE] = {
-	[TEGRA_SUSPEND_NONE]	= "none",
-	[TEGRA_SUSPEND_LP2]	= "lp2",
-	[TEGRA_SUSPEND_LP1]	= "lp1",
-	[TEGRA_SUSPEND_LP0]	= "lp0",
-};
 
 #if defined(CONFIG_TEGRA_CLUSTER_CONTROL) && INSTRUMENT_CLUSTER_SWITCH
 enum tegra_cluster_switch_time_id {
@@ -213,6 +209,13 @@ static unsigned long
 #endif
 
 #ifdef CONFIG_PM_SLEEP
+static const char *tegra_suspend_name[TEGRA_MAX_SUSPEND_MODE] = {
+	[TEGRA_SUSPEND_NONE]	= "none",
+	[TEGRA_SUSPEND_LP2]	= "lp2",
+	[TEGRA_SUSPEND_LP1]	= "lp1",
+	[TEGRA_SUSPEND_LP0]	= "lp0",
+};
+
 unsigned long tegra_cpu_power_good_time(void)
 {
 	if (WARN_ON_ONCE(!pdata))
@@ -535,7 +538,7 @@ bool tegra_set_cpu_in_lp2(int cpu)
 	if ((cpu == 0) && cpumask_equal(&tegra_in_lp2, cpu_online_mask))
 		last_cpu = true;
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
-	else
+	else if (cpu == 1)
 		tegra2_cpu_set_resettable_soon();
 #endif
 
@@ -611,14 +614,11 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 	suspend_cpu_complex(mode);
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_prolog);
 	flush_cache_all();
-	outer_flush_all();
 	outer_disable();
 
 	tegra_sleep_cpu(PLAT_PHYS_OFFSET - PAGE_OFFSET);
 
-#ifdef CONFIG_CACHE_L2X0
 	tegra_init_cache(false);
-#endif
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_switch);
 	restore_cpu_complex(mode);
 	cpu_complex_pm_exit();
@@ -719,7 +719,6 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 
 	switch (mode) {
 	case TEGRA_SUSPEND_LP0:
-		rate = clk_get_rate_all_locked(tegra_pclk);
 		if (pdata->combined_req) {
 			reg |= TEGRA_POWER_PWRREQ_OE;
 			reg &= ~TEGRA_POWER_CPU_PWRREQ_OE;
@@ -781,6 +780,10 @@ static int tegra_suspend_enter(suspend_state_t state)
 	read_persistent_clock(&ts_entry);
 
 	ret = tegra_suspend_dram(current_suspend_mode, 0);
+	if (ret) {
+		pr_info("Aborting suspend, tegra_suspend_dram error=%d\n", ret);
+		goto abort_suspend;
+	}
 
 	read_persistent_clock(&ts_exit);
 
@@ -794,6 +797,7 @@ static int tegra_suspend_enter(suspend_state_t state)
 			tegra_dvfs_rail_pause(tegra_core_rail, delta, true);
 	}
 
+abort_suspend:
 	if (pdata && pdata->board_resume)
 		pdata->board_resume(current_suspend_mode, TEGRA_RESUME_AFTER_PERIPHERAL);
 
@@ -828,15 +832,21 @@ static void tegra_suspend_check_pwr_stats(void)
 
 int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 {
-	BUG_ON(mode < 0 || mode >= TEGRA_MAX_SUSPEND_MODE);
+	int err = 0;
+
+	if (WARN_ON(mode <= TEGRA_SUSPEND_NONE ||
+		mode >= TEGRA_MAX_SUSPEND_MODE)) {
+		err = -ENXIO;
+		goto fail;
+	}
 
 	if ((mode == TEGRA_SUSPEND_LP0) && !tegra_pm_irq_lp0_allowed()) {
 		pr_info("LP0 not used due to unsupported wakeup events\n");
 		mode = TEGRA_SUSPEND_LP1;
 	}
 
-	//if ((mode == TEGRA_SUSPEND_LP0) || (mode == TEGRA_SUSPEND_LP1))
-	//	tegra_suspend_check_pwr_stats();
+	if ((mode == TEGRA_SUSPEND_LP0) || (mode == TEGRA_SUSPEND_LP1))
+		tegra_suspend_check_pwr_stats();
 
 	tegra_common_suspend();
 
@@ -910,7 +920,8 @@ int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 
 	tegra_common_resume();
 
-	return 0;
+fail:
+	return err;
 }
 
 /*
@@ -968,6 +979,11 @@ static ssize_t suspend_mode_store(struct kobject *kobj,
 	len = name_ptr - buf;
 	if (!len)
 		goto bad_name;
+	/* TEGRA_SUSPEND_NONE not allowed as suspend state */
+	if (!(strncmp(buf, tegra_suspend_name[TEGRA_SUSPEND_NONE], len))) {
+		pr_info("Illegal tegra suspend state: %s\n", buf);
+		goto bad_name;
+	}
 
 	for (new_mode = TEGRA_SUSPEND_NONE; \
 			new_mode < TEGRA_MAX_SUSPEND_MODE; ++new_mode) {
@@ -985,9 +1001,7 @@ static struct kobj_attribute suspend_mode_attribute =
 	__ATTR(mode, 0644, suspend_mode_show, suspend_mode_store);
 
 static struct kobject *suspend_kobj;
-#endif
 
-#ifdef CONFIG_PM_SLEEP
 static int tegra_pm_enter_suspend(void)
 {
 	pr_info("Entering suspend state %s\n", lp_state[current_suspend_mode]);
@@ -1023,6 +1037,9 @@ void __init tegra_init_suspend(struct tegra_suspend_platform_data *plat)
 
 	tegra_cpu_rail = tegra_dvfs_get_rail_by_name("vdd_cpu");
 	tegra_core_rail = tegra_dvfs_get_rail_by_name("vdd_core");
+	pm_qos_add_request(&awake_cpu_freq_req, PM_QOS_CPU_FREQ_MIN,
+			   AWAKE_CPU_FREQ_MIN);
+
 	tegra_pclk = clk_get_sys(NULL, "pclk");
 	BUG_ON(IS_ERR(tegra_pclk));
 	pdata = plat;
@@ -1260,67 +1277,3 @@ static int tegra_debug_uart_syscore_init(void)
 	return 0;
 }
 arch_initcall(tegra_debug_uart_syscore_init);
-
-#ifdef CONFIG_DEBUG_FS
-static int tegra_suspend_debug_show(struct seq_file *s, void *data)
-{
-	seq_printf(s, "%s\n", tegra_suspend_name[*(int *)s->private]);
-	return 0;
-}
-
-static int tegra_suspend_debug_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, tegra_suspend_debug_show, inode->i_private);
-}
-
-static int tegra_suspend_debug_write(struct file *file,
-	const char __user *user_buf, size_t count, loff_t *ppos)
-{
-	char buf[32];
-	int buf_size;
-	int i;
-	struct seq_file *s = file->private_data;
-	enum tegra_suspend_mode *val = s->private;
-
-	memset(buf, 0x00, sizeof(buf));
-	buf_size = min(count, (sizeof(buf)-1));
-	if (copy_from_user(buf, user_buf, buf_size))
-		return -EFAULT;
-
-	for (i = 0; i < TEGRA_MAX_SUSPEND_MODE; i++) {
-		if (!strnicmp(buf, tegra_suspend_name[i],
-		    strlen(tegra_suspend_name[i]))) {
-			if (i > pdata->suspend_mode)
-				return -EINVAL;
-			*val = i;
-			return count;
-		}
-	}
-
-	return -EINVAL;
-}
-
-static const struct file_operations tegra_suspend_debug_fops = {
-	.open		= tegra_suspend_debug_open,
-	.write		= tegra_suspend_debug_write,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
-
-static int __init tegra_suspend_debug_init(void)
-{
-	struct dentry *d;
-
-	d = debugfs_create_file("suspend_mode", 0755, NULL,
-		(void *)&current_suspend_mode, &tegra_suspend_debug_fops);
-	if (!d) {
-		pr_info("Failed to create suspend_mode debug file\n");
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
-late_initcall(tegra_suspend_debug_init);
-#endif

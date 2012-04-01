@@ -102,7 +102,10 @@ static inline int tegra_enable_latency_scaling(enum tegra_la_id id,
 	return 0;
 }
 
-static inline void tegra_disable_latency_scaling(enum tegra_la_id id) { }
+static inline void tegra_disable_latency_scaling(enum tegra_la_id id)
+{
+	return 0;
+}
 #else
 int tegra_set_latency_allowance(enum tegra_la_id id,
 				unsigned int bandwidth_in_mbps);

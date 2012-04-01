@@ -205,11 +205,12 @@ int tegra_emc_set_rate(unsigned long rate)
 	 */
 	rate = rate / 2 / 1000;
 
-	for (i = 0; i < tegra_emc_table_size; i++)
+
+	for (i = tegra_emc_table_size - 1; i >= 0; i--)
 		if (tegra_emc_table[i].rate == rate)
 			break;
 
-	if (i >= tegra_emc_table_size){
+	if (i < 0) {
 		printk("faile! 2 tegra_emc_set_rateemc rate=%u +\n",rate);
 		return -EINVAL;
 	}

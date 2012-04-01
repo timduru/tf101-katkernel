@@ -48,8 +48,7 @@
  *	 of secondary CPUs.
  */
 ENTRY(tegra_secondary_startup)
-	bl	tegra_enable_coresite
-	bl	__invalidate_cpu_state
+	bl	tegra_invalidate_l1
 	b	secondary_startup
 ENDPROC(tegra_secondary_startup)
 #endif
@@ -63,8 +62,7 @@ ENDPROC(tegra_secondary_startup)
  *	  re-enabling sdram.
  */
 ENTRY(tegra_resume)
-	bl	tegra_enable_coresite
-	bl	__invalidate_cpu_state
+	bl	tegra_invalidate_l1
 
 	cpu_id	r0
 	cmp	r0, #0				@ CPU0?
@@ -94,38 +92,6 @@ ENTRY(tegra_resume)
 	b	tegra_cpu_resume_phys
 ENDPROC(tegra_resume)
 #endif
-
-/*
- *	__invalidate_cpu_state
- *
- *	  Invalidates volatile CPU state (SCU tags, caches, branch address
- *	  arrays, exclusive monitor, etc.) so that they can be safely enabled
- *	  instruction caching and branch predicition enabled
- */
-__invalidate_cpu_state:
-	clrex
-	mov	r0, #0
-	mcr	p15, 0, r0, c1, c0, 1	@ disable SMP, prefetch, broadcast
-	isb
-	mcr	p15, 0, r0, c7, c5, 0	@ invalidate BTAC, i-cache
-	mcr	p15, 0, r0, c7, c5, 6	@ invalidate branch pred array
-	mcr	p15, 0, r0, c8, c7, 0	@ invalidate unified TLB
-	dsb
-	isb
-
-	cpu_id	r0
-	cmp	r0, #0
-	mov32	r1, (TEGRA_ARM_PERIF_BASE + 0xC)
-	movne	r0, r0, lsl #2
-	movne	r2, #0xf
-	movne	r2, r2, lsl r0
-	strne	r2, [r1]		@ invalidate SCU tags for CPU
-
-	dsb
-	mov	r0, #0x1800
-	mcr	p15, 0, r0, c1, c0, 0	@ enable branch prediction, i-cache
-	isb
-	/* fall through */
 
 /*
  *	tegra_invalidate_l1
@@ -166,12 +132,6 @@ tegra_invalidate_l1:
 	isb
 	mov	pc, lr
 
-	/* Enable Coresight access on cpu */
-tegra_enable_coresite:
-	mov32	r0, 0xC5ACCE55
-	mcr	p14, 0, r0, c7, c12, 6
-	mov	pc, lr
-
 /*
  * __tegra_cpu_reset_handler_halt_failed:
  *
@@ -204,8 +164,6 @@ ENTRY(__tegra_cpu_reset_handler_start)
 ENTRY(__tegra_cpu_reset_handler)
 
 #if DEBUG_CPU_RESET_HANDLER
-	mov32	r0, 0xC5ACCE55
-	mcr	p14, 0, r0, c7, c12, 6		@ Enable CoreSight access
 	b	.
 #endif
 #ifndef CONFIG_TRUSTED_FOUNDATIONS

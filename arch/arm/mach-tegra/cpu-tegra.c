@@ -577,14 +577,16 @@ static int tegra_target(struct cpufreq_policy *policy,
 
 	mutex_lock(&tegra_cpu_lock);
 
-	cpufreq_frequency_table_target(policy, freq_table, target_freq,
+	ret = cpufreq_frequency_table_target(policy, freq_table, target_freq,
 		relation, &idx);
+	if (ret)
+		goto _out;
 
 	freq = freq_table[idx].frequency;
 
 	target_cpu_speed[policy->cpu] = freq;
 	ret = tegra_cpu_set_speed_cap(&new_speed);
-
+_out:
 	mutex_unlock(&tegra_cpu_lock);
 
 	return ret;

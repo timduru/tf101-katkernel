@@ -82,6 +82,8 @@ GSYMS
 GTAGS
 
 *.orig
+*.org
+*.nue
 *~
 \#*#
 
