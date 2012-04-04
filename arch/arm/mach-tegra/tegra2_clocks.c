@@ -795,6 +795,7 @@ static int tegra2_pll_clk_enable(struct clk *c)
 		val2= clk_readl(c->reg);
 		printk("%s: pll_d: reg=0x%x; val= 0x%x\n", __func__, c->reg, val2);
 
+		
 		switch(hdmi_resolution) {
 		case HDMI_ACTIVE_1920_1080:
 			plld_base = 0x4000C604;

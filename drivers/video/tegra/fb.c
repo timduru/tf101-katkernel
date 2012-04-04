@@ -134,7 +134,11 @@ static int tegra_fb_set_par(struct fb_info *info)
 		 * client requests it
 		 */
 		stereo = !!(var->vmode & info->mode->vmode &
+#ifndef CONFIG_TEGRA_HDMI_74MHZ_LIMIT
 					FB_VMODE_STEREO_FRAME_PACK);
+#else
+					FB_VMODE_STEREO_LEFT_RIGHT);
+#endif
 
 		tegra_dc_set_fb_mode(tegra_fb->win->dc, info->mode, stereo);
 
@@ -145,6 +149,33 @@ static int tegra_fb_set_par(struct fb_info *info)
 	}
 	return 0;
 }
+
+static int tegra_fb_setcolreg(unsigned regno, unsigned red, unsigned green,
+	unsigned blue, unsigned transp, struct fb_info *info)
+{
+	struct fb_var_screeninfo *var = &info->var;
+
+	if (info->fix.visual == FB_VISUAL_TRUECOLOR ||
+	    info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
+		u32 v;
+
+		if (regno >= 16)
+			return -EINVAL;
+
+		red = (red >> (16 - info->var.red.length));
+		green = (green >> (16 - info->var.green.length));
+		blue = (blue >> (16 - info->var.blue.length));
+
+		v = (red << var->red.offset) |
+			(green << var->green.offset) |
+			(blue << var->blue.offset);
+
+		((u32 *)info->pseudo_palette)[regno] = v;
+	}
+
+	return 0;
+}
+
 
 static int tegra_fb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 {
@@ -160,29 +191,108 @@ static int tegra_fb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 		return -EINVAL;
 
 	if (info->fix.visual == FB_VISUAL_TRUECOLOR ||
-	    info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
-		for (i = 0; i < cmap->len; i++) {
-			dc->fb_lut.r[start+i] = *red++ >> 8;
-			dc->fb_lut.g[start+i] = *green++ >> 8;
-			dc->fb_lut.b[start+i] = *blue++ >> 8;
+		info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
+		/*
+		 * For now we are considering color schemes with
+		 * cmap->len <=16 as special case of basic color
+		 * scheme to support fbconsole.But for DirectColor
+		 * visuals(like the one we actually have, that include
+		 * a HW LUT),the way it's intended to work is that the
+		 * actual LUT HW is programmed to the intended values,
+		 * even for small color maps like those with 16 or fewer
+		 * entries. The pseudo_palette is then programmed to the
+		 * identity transform.
+		 */
+		if (cmap->len <= 16) {
+			/* Low-color schemes like fbconsole*/
+			u16 *transp = cmap->transp;
+			u_int vtransp = 0xffff;
+
+			for (i = 0; i < cmap->len; i++) {
+				if (transp)
+					vtransp = *transp++;
+				if (tegra_fb_setcolreg(start++, *red++,
+					*green++, *blue++,
+					vtransp, info))
+						return -EINVAL;
+			}
+		} else {
+			/* High-color schemes*/
+			for (i = 0; i < cmap->len; i++) {
+				dc->fb_lut.r[start+i] = *red++ >> 8;
+				dc->fb_lut.g[start+i] = *green++ >> 8;
+				dc->fb_lut.b[start+i] = *blue++ >> 8;
+			}
+			tegra_dc_update_lut(dc, -1, -1);
 		}
-
-		tegra_dc_update_lut(dc, -1, -1);
 	}
-
 	return 0;
 }
+
+#if defined(CONFIG_FRAMEBUFFER_CONSOLE)
+static void tegra_fb_flip_win(struct tegra_fb_info *tegra_fb)
+{
+	struct tegra_dc_win *win = tegra_fb->win;
+	struct fb_info *info = tegra_fb->info;
+
+	win->x.full = dfixed_const(0);
+	win->y.full = dfixed_const(0);
+	win->w.full = dfixed_const(tegra_fb->xres);
+	win->h.full = dfixed_const(tegra_fb->yres);
+
+	/* TODO: set to output res dc */
+	win->out_x = 0;
+	win->out_y = 0;
+	win->out_w = tegra_fb->xres;
+	win->out_h = tegra_fb->yres;
+	win->z = 0;
+	win->phys_addr = info->fix.smem_start +
+		(info->var.yoffset * info->fix.line_length) +
+		(info->var.xoffset * (info->var.bits_per_pixel / 8));
+	win->virt_addr = info->screen_base;
+
+	win->phys_addr_u = 0;
+	win->phys_addr_v = 0;
+	win->stride = info->fix.line_length;
+	win->stride_uv = 0;
+
+	switch (info->var.bits_per_pixel) {
+	default:
+		WARN_ON(1);
+		/* fall through */
+	case 32:
+		tegra_fb->win->fmt = TEGRA_WIN_FMT_R8G8B8A8;
+		break;
+	case 16:
+		tegra_fb->win->fmt = TEGRA_WIN_FMT_B5G6R5;
+		break;
+	}
+	win->flags = TEGRA_WIN_FLAG_ENABLED;
+
+	tegra_dc_update_windows(&tegra_fb->win, 1);
+	tegra_dc_sync_windows(&tegra_fb->win, 1);
+}
+#endif
 
 static int tegra_fb_blank(int blank, struct fb_info *info)
 {
 	struct tegra_fb_info *tegra_fb = info->par;
-	printk("%s(%d)+:\n", __FUNCTION__, __LINE__);
+
 	switch (blank) {
 	case FB_BLANK_UNBLANK:
 		dev_dbg(&tegra_fb->ndev->dev, "unblank\n");
 		tegra_fb->win->flags = TEGRA_WIN_FLAG_ENABLED;
 		tegra_dc_enable(tegra_fb->win->dc);
-		printk("%s(%d)-\n", __FUNCTION__, __LINE__);
+#if defined(CONFIG_FRAMEBUFFER_CONSOLE)
+		/*
+		* TODO:
+		* This is a work around to provide an unblanking flip
+		* to dc driver, required to display fb-console after
+		* a blank event,and needs to be replaced by a proper
+		* unblanking mechanism
+		*/
+		tegra_fb_flip_win(tegra_fb);
+#endif
 		return 0;
 
 	case FB_BLANK_NORMAL:
@@ -195,11 +305,9 @@ static int tegra_fb_blank(int blank, struct fb_info *info)
 	case FB_BLANK_POWERDOWN:
 		dev_dbg(&tegra_fb->ndev->dev, "blank - powerdown\n");
 		tegra_dc_disable(tegra_fb->win->dc);
-		printk("%s(%d)-\n", __FUNCTION__, __LINE__);
 		return 0;
 
 	default:
-		printk("%s(%d)-; unknown state, return -ENOTTY.\n", __FUNCTION__, __LINE__);
 		return -ENOTTY;
 	}
 }
@@ -478,6 +586,18 @@ struct tegra_fb_info *tegra_fb_register(struct nvhost_device *ndev,
 	if (fb_data->flags & TEGRA_FB_FLIP_ON_PROBE) {
 		tegra_dc_update_windows(&tegra_fb->win, 1);
 		tegra_dc_sync_windows(&tegra_fb->win, 1);
+	}
+
+	if (dc->mode.pclk > 1000) {
+		struct tegra_dc_mode *mode = &dc->mode;
+
+		info->var.pixclock = KHZ2PICOS(mode->pclk / 1000);
+		info->var.left_margin = mode->h_back_porch;
+		info->var.right_margin = mode->h_front_porch;
+		info->var.upper_margin = mode->v_back_porch;
+		info->var.lower_margin = mode->v_front_porch;
+		info->var.hsync_len = mode->h_sync_width;
+		info->var.vsync_len = mode->v_sync_width;
 	}
 
 	return tegra_fb;
