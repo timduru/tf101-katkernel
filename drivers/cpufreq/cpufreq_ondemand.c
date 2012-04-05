@@ -40,7 +40,7 @@
 
 /*
  * The polling frequency of this governor depends on the capability of
- * the processor. Default polling frequency is 1000 times the transition
+ * the processor. Default polling frequency is 100 times the transition
  * latency of the processor. The governor will work on any processor with
  * transition latency <= 10mS, using appropriate sampling
  * rate.
@@ -52,7 +52,7 @@
 
 static unsigned int min_sampling_rate;
 
-#define LATENCY_MULTIPLIER			(1000)
+#define LATENCY_MULTIPLIER			(100)
 #define MIN_LATENCY_MULTIPLIER			(100)
 #define TRANSITION_LATENCY_LIMIT		(10 * 1000 * 1000)
 
@@ -616,7 +616,8 @@ static int should_io_be_busy(void)
 	    boot_cpu_data.x86_model >= 15)
 		return 1;
 #endif
-	return 0;
+	/* Modern ARM processors should idle fine at higher frequencies - T */
+	return 1;
 }
 
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,

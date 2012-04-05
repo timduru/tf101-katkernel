@@ -31,7 +31,7 @@ config ARCH_TEGRA_3x_SOC
 	select ARCH_TEGRA_HAS_DUAL_CPU_CLUSTERS
 	select CPU_V7
 	select ARM_GIC
-	select GIC_SET_MULTIPLE_CPUS
+	select GIC_SET_MULTIPLE_CPUS if SMP	
 	select ARCH_REQUIRE_GPIOLIB
 	select USB_ARCH_HAS_EHCI if USB_SUPPORT
 	select USB_EHCI_TEGRA if USB_SUPPORT
@@ -40,6 +40,8 @@ config ARCH_TEGRA_3x_SOC
 	select REPORT_PRESENT_CPUS if TEGRA_AUTO_HOTPLUG
 	select ARCH_SUPPORTS_MSI if TEGRA_PCI
 	select PCI_MSI if TEGRA_PCI
+	select ARM_ERRATA_754322
+	select TEGRA_LP2_ARM_TWD if HAVE_ARM_TWD && !TEGRA_RAIL_OFF_MULTIPLE_CPUS
 	help
 	  Support for NVIDIA Tegra 3 family of SoCs, based upon the
 	  ARM CortexA9MP CPU and the ARM PL310 L2 cache controller
@@ -454,5 +456,17 @@ config TEGRA_WDT_RECOVERY
 	help
 	  Enables watchdog recovery mechanism to protect against
 	  suspend/resume hangs.
+
+config TEGRA_LP2_ARM_TWD
+	bool
+
+config TEGRA_RAIL_OFF_MULTIPLE_CPUS
+	bool
 endif
 
+config TEGRA_SLOW_CSITE
+	bool "lower csite clock to 1 Mhz to reduce its power consumption"
+	default n
+	help
+	  When enabled, csite will be running at 1 Mhz and the performance of
+	  jtag, lauterbach and other debugger will be extremely slow.

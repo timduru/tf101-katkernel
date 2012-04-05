@@ -9,6 +9,7 @@ obj-y                                   += io.o
 obj-y                                   += irq.o
 obj-$(CONFIG_TEGRA_GRHOST)              += syncpt.o
 obj-y                                   += clock.o
+obj-y                                   += clock-common.o
 obj-y                                   += timer.o
 ifeq ($(CONFIG_ARCH_TEGRA_2x_SOC),y)
 obj-y                                   += tegra2_clocks.o
@@ -17,7 +18,7 @@ else
 obj-y                                   += tegra3_clocks.o
 obj-y                                   += timer-t3.o
 endif
-obj-y                                   += gpio.o
+#obj-y                                   += gpio.o
 obj-y                                   += pinmux.o
 obj-y                                   += devices.o
 obj-y                                   += delay.o

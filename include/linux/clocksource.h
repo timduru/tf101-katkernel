@@ -22,6 +22,10 @@
 typedef u64 cycle_t;
 struct clocksource;
 
+#ifdef CONFIG_ARCH_CLOCKSOURCE_DATA
+#include <asm/clocksource.h>
+#endif
+
 /**
  * struct cyclecounter - hardware abstraction for a free running counter
  *	Provides completely state-free accessors to the underlying hardware.
@@ -152,8 +156,9 @@ extern u64 timecounter_cyc2time(struct timecounter *tc,
  * @mult:		cycle to nanosecond multiplier
  * @shift:		cycle to nanosecond divisor (power of two)
  * @max_idle_ns:	max idle time permitted by the clocksource (nsecs)
+ * @maxadj		maximum adjustment value to mult (~11%)
  * @flags:		flags describing special properties
- * @vread:		vsyscall based read
+ * @archdata:		arch-specific data
  * @suspend:		suspend function for the clocksource, if necessary
  * @resume:		resume function for the clocksource, if necessary
  */
@@ -168,17 +173,14 @@ struct clocksource {
 	u32 mult;
 	u32 shift;
 	u64 max_idle_ns;
-
-#ifdef CONFIG_IA64
-	void *fsys_mmio;        /* used by fsyscall asm code */
-#define CLKSRC_FSYS_MMIO_SET(mmio, addr)      ((mmio) = (addr))
-#else
-#define CLKSRC_FSYS_MMIO_SET(mmio, addr)      do { } while (0)
+	u32 maxadj;
+#ifdef CONFIG_ARCH_CLOCKSOURCE_DATA
+	struct arch_clocksource_data archdata;
 #endif
+
 	const char *name;
 	struct list_head list;
 	int rating;
-	cycle_t (*vread)(void);
 	int (*enable)(struct clocksource *cs);
 	void (*disable)(struct clocksource *cs);
 	unsigned long flags;
@@ -337,6 +339,14 @@ static inline void update_vsyscall_tz(void)
 #endif
 
 extern void timekeeping_notify(struct clocksource *clock);
+
+extern cycle_t clocksource_mmio_readl_up(struct clocksource *);
+extern cycle_t clocksource_mmio_readl_down(struct clocksource *);
+extern cycle_t clocksource_mmio_readw_up(struct clocksource *);
+extern cycle_t clocksource_mmio_readw_down(struct clocksource *);
+
+extern int clocksource_mmio_init(void __iomem *, const char *,
+	unsigned long, int, unsigned, cycle_t (*)(struct clocksource *));
 
 extern int clocksource_i8253_init(void);
 

@@ -92,25 +92,12 @@ static void tegra_timer_set_mode(enum clock_event_mode mode,
 	}
 }
 
-static cycle_t tegra_clocksource_read(struct clocksource *cs)
-{
-	return timer_readl(TIMERUS_CNTR_1US);
-}
-
 static struct clock_event_device tegra_clockevent = {
 	.name		= "timer0",
 	.rating		= 300,
 	.features	= CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC,
 	.set_next_event	= tegra_timer_set_next_event,
 	.set_mode	= tegra_timer_set_mode,
-};
-
-static struct clocksource tegra_clocksource = {
-	.name	= "timer_us",
-	.rating	= 300,
-	.read	= tegra_clocksource_read,
-	.mask	= CLOCKSOURCE_MASK(32),
-	.flags	= CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
 static DEFINE_CLOCK_DATA(cd);
@@ -217,6 +204,15 @@ static struct syscore_ops tegra_timer_syscore_ops = {
 };
 
 #ifdef CONFIG_HAVE_ARM_TWD
+int tegra_twd_get_state(struct tegra_twd_context *context)
+{
+	context->twd_ctrl = readl(twd_base + TWD_TIMER_CONTROL);
+	context->twd_load = readl(twd_base + TWD_TIMER_LOAD);
+	context->twd_cnt = readl(twd_base + TWD_TIMER_COUNTER);
+
+	return 0;
+}
+
 void tegra_twd_suspend(struct tegra_twd_context *context)
 {
 	context->twd_ctrl = readl(twd_base + TWD_TIMER_CONTROL);
@@ -272,7 +268,8 @@ static void __init tegra_init_timer(void)
 	init_fixed_sched_clock(&cd, tegra_update_sched_clock, 32,
 			       1000000, SC_MULT, SC_SHIFT);
 
-	if (clocksource_register_hz(&tegra_clocksource, 1000000)) {
+	if (clocksource_mmio_init(timer_reg_base + TIMERUS_CNTR_1US,
+		"timer_us", 1000000, 300, 32, clocksource_mmio_readl_up)) {
 		printk(KERN_ERR "Failed to register clocksource\n");
 		BUG();
 	}

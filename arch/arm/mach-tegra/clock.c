@@ -183,7 +183,8 @@ static void __clk_set_cansleep(struct clk *c)
 
 		if (!possible_parent && child->inputs) {
 			for (i = 0; child->inputs[i].input; i++) {
-				if (child->inputs[i].input == c) {
+				if ((child->inputs[i].input == c) &&
+				    tegra_clk_is_parent_allowed(child, c)) {
 					possible_parent = true;
 					break;
 				}
@@ -341,6 +342,11 @@ int clk_set_parent_locked(struct clk *c, struct clk *parent)
 
 	if (!c->ops || !c->ops->set_parent) {
 		ret = -ENOSYS;
+		goto out;
+	}
+
+	if (!tegra_clk_is_parent_allowed(c, parent)) {
+		ret = -EINVAL;
 		goto out;
 	}
 
@@ -767,20 +773,17 @@ static int __init tegra_init_disable_boot_clocks(void)
 		clk_lock_save(c, &flags);
 		if (c->refcnt == 0 && c->state == ON &&
 				c->ops && c->ops->disable) {
-			if(strcmp(c->name, "pwm")) {
-				pr_warn_once("%s clocks left on by bootloader:\n",
-					tegra_keep_boot_clocks ?
-						"Prevented disabling" :
-						"Disabling");
+			pr_warn_once("%s clocks left on by bootloader:\n",
+				tegra_keep_boot_clocks ?
+					"Prevented disabling" :
+					"Disabling");
 
-				pr_warn("   %s\n", c->name);
+			pr_warn("   %s\n", c->name);
 
-				if (!tegra_keep_boot_clocks) {
-					c->ops->disable(c);
-					c->state = OFF;
-				}
-			} else
-				printk("Don't disable pwm clock for boot animation\n");
+			if (!tegra_keep_boot_clocks) {
+				c->ops->disable(c);
+				c->state = OFF;
+			}
 		}
 		clk_unlock_restore(c, &flags);
 	}
@@ -1245,9 +1248,39 @@ static int time_on_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(time_on_fops, time_on_get, NULL, "%llu\n");
 
+static int possible_rates_show(struct seq_file *s, void *data)
+{
+	struct clk *c = s->private;
+	long rate = 0;
+
+	/* shared bus clock must round up, unless top of range reached */
+	while (rate <= c->max_rate) {
+		long rounded_rate = c->ops->round_rate(c, rate);
+		if (IS_ERR_VALUE(rounded_rate) || (rounded_rate <= rate))
+			break;
+
+		rate = rounded_rate + 2000;	/* 2kHz resolution */
+		seq_printf(s, "%ld ", rounded_rate / 1000);
+	}
+	seq_printf(s, "(kHz)\n");
+	return 0;
+}
+
+static int possible_rates_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, possible_rates_show, inode->i_private);
+}
+
+static const struct file_operations possible_rates_fops = {
+	.open		= possible_rates_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 static int clk_debugfs_register_one(struct clk *c)
 {
-	struct dentry *d, *child, *child_tmp;
+	struct dentry *d;
 
 	d = debugfs_create_dir(c->name, clk_debugfs_root);
 	if (!d)
@@ -1293,13 +1326,17 @@ static int clk_debugfs_register_one(struct clk *c)
 			goto err_out;
 	}
 
+	if (c->ops && c->ops->round_rate && c->ops->shared_bus_update) {
+		d = debugfs_create_file("possible_rates", S_IRUGO, c->dent,
+			c, &possible_rates_fops);
+		if (!d)
+			goto err_out;
+	}
+
 	return 0;
 
 err_out:
-	d = c->dent;
-	list_for_each_entry_safe(child, child_tmp, &d->d_subdirs, d_u.d_child)
-		debugfs_remove(child);
-	debugfs_remove(c->dent);
+	debugfs_remove_recursive(c->dent);
 	return -ENOMEM;
 }
 
