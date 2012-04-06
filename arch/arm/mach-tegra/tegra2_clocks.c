@@ -193,27 +193,6 @@ static int tegra_periph_clk_enable_refcount[3 * 32];
 #define chipid_readl() \
 	__raw_readl((u32)misc_gp_hidrev_base + MISC_GP_HIDREV)
 
-unsigned long clk_measure_input_freq(void)
-{
-	u32 clock_autodetect;
-	clk_writel(OSC_FREQ_DET_TRIG | 1, OSC_FREQ_DET);
-	do {} while (clk_readl(OSC_FREQ_DET_STATUS) & OSC_FREQ_DET_BUSY);
-	clock_autodetect = clk_readl(OSC_FREQ_DET_STATUS);
-	if (clock_autodetect >= 732 - 3 && clock_autodetect <= 732 + 3) {
-		return 12000000;
-	} else if (clock_autodetect >= 794 - 3 && clock_autodetect <= 794 + 3) {
-		return 13000000;
-	} else if (clock_autodetect >= 1172 - 3 && clock_autodetect <= 1172 + 3) {
-		return 19200000;
-	} else if (clock_autodetect >= 1587 - 3 && clock_autodetect <= 1587 + 3) {
-		return 26000000;
-	} else {
-		pr_err("%s: Unexpected clock autodetect value %d", __func__, clock_autodetect);
-		BUG();
-		return 0;
-	}
-}
-
 static int clk_div71_get_divider(unsigned long parent_rate, unsigned long rate)
 {
 	s64 divider_u71 = parent_rate * 2;
@@ -256,7 +235,7 @@ static unsigned long tegra2_clk_m_autodetect_rate(struct clk *c)
 {
 	u32 auto_clock_control = clk_readl(OSC_CTRL) & ~OSC_CTRL_OSC_FREQ_MASK;
 
-	c->rate = clk_measure_input_freq();
+	c->rate = tegra_clk_measure_input_freq();
 	switch (c->rate) {
 	case 12000000:
 		auto_clock_control |= OSC_CTRL_OSC_FREQ_12MHZ;
@@ -349,7 +328,7 @@ static int tegra2_super_clk_set_parent(struct clk *c, struct clk *p)
 	const struct clk_mux_sel *sel;
 	int shift;
 
-	val = clk_readl(c->reg + SUPER_CLK_MUX);;
+	val = clk_readl(c->reg + SUPER_CLK_MUX);
 	BUG_ON(((val & SUPER_STATE_MASK) != SUPER_STATE_RUN) &&
 		((val & SUPER_STATE_MASK) != SUPER_STATE_IDLE));
 	shift = ((val & SUPER_STATE_MASK) == SUPER_STATE_IDLE) ?
@@ -471,13 +450,14 @@ static int tegra2_cpu_clk_set_rate(struct clk *c, unsigned long rate)
 		goto out;
 	}
 
+out:
 	/* We can't parent the twd to directly to the CPU complex because
 	   the TWD frequency update notifier is called in an atomic context
 	   and the CPU frequency update requires a mutex. Update the twd
 	   clock rate with the new CPU complex rate. */
 	clk_set_rate(&tegra2_clk_twd, clk_get_rate_locked(c));
 
-out:
+
 	clk_disable(c->u.cpu.main);
 	return ret;
 }
@@ -1113,6 +1093,8 @@ static void tegra2_periph_clk_init(struct clk *c)
 	}
 
 	c->state = ON;
+	if (c->flags & PERIPH_NO_ENB)
+		return;
 
 	if (!c->u.periph.clk_num)
 		return;
@@ -1133,6 +1115,9 @@ static int tegra2_periph_clk_enable(struct clk *c)
 	unsigned long flags;
 	int refcount;
 	pr_debug("%s on clock %s\n", __func__, c->name);
+
+	if (c->flags & PERIPH_NO_ENB)
+		return 0;
 
 	if (!c->u.periph.clk_num)
 		return 0;
@@ -1170,6 +1155,9 @@ static void tegra2_periph_clk_disable(struct clk *c)
 
 	pr_debug("%s on clock %s\n", __func__, c->name);
 
+	if (c->flags & PERIPH_NO_ENB)
+		return;
+
 	if (!c->u.periph.clk_num)
 		return;
 
@@ -1199,6 +1187,9 @@ static void tegra2_periph_clk_reset(struct clk *c, bool assert)
 
 	pr_debug("%s %s on clock %s\n", __func__,
 		 assert ? "assert" : "deassert", c->name);
+
+	if (c->flags & PERIPH_NO_ENB)
+		return;
 
 	BUG_ON(!c->u.periph.clk_num);
 
@@ -2803,7 +2794,9 @@ struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)
 unsigned long tegra_emc_to_cpu_ratio(unsigned long cpu_rate)
 {
 	/* Vote on memory bus frequency based on cpu frequency */
-	if (cpu_rate >= 816000)
+	if (cpu_rate > 1000000000)
+		return 760000000;
+	else if (cpu_rate >= 816000)
 		return 600000000;	/* cpu 816 MHz, emc max */
 	else if (cpu_rate >= 608000)
 		return 300000000;	/* cpu 608 MHz, emc 150Mhz */

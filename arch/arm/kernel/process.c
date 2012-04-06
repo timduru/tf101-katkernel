@@ -232,7 +232,7 @@ void cpu_idle(void)
 				cpu_relax();
 			} else {
 				stop_critical_timings();
-				if (cpuidle_idle_call())
+//				if (cpuidle_idle_call())
 					pm_idle();
 				start_critical_timings();
 				/*
