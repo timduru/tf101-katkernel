@@ -37,6 +37,8 @@ static int tegra_pwm_backlight_update_status(struct backlight_device *bl)
 	int max = bl->props.max_brightness;
 	struct tegra_dc *dc;
 
+	printk("tegra_pwm_backlight_update_status\n");
+	
 	if (bl->props.power != FB_BLANK_UNBLANK)
 		brightness = 0;
 

@@ -765,7 +765,7 @@ void   register_docking_charging_irq(void)
 	if (rc < 0)
 		printk(KERN_ERR"Could not register for TEGRA_GPIO_PS1 interrupt, irq = %d, rc = %d\n", gpio_to_irq(TEGRA_GPIO_PS1), rc);
 	printk("previous\n");
-
+	msleep(1000);
 	if(!gpio_get_value(TEGRA_GPIO_PX5) && !gpio_get_value(TEGRA_GPIO_PS1)){
 		battery_docking_status=true;
 		enable_irq(gpio_to_irq(TEGRA_GPIO_PS1));

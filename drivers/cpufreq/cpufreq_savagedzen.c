@@ -594,7 +594,7 @@ static int cpufreq_governor_savagedzen(struct cpufreq_policy *new_policy,
                  * entries if we have already done so.
                  */
                 if (atomic_inc_return(&active_count) <= 1) {
-                        rc = sysfs_create_group(&new_policy->kobj, &savagedzen_attr_group);
+                        rc = sysfs_create_group(cpufreq_global_kobject, &savagedzen_attr_group);
                         if (rc)
                                 return rc;
                         pm_idle_old = pm_idle;
@@ -621,7 +621,7 @@ static int cpufreq_governor_savagedzen(struct cpufreq_policy *new_policy,
 
                 if (atomic_dec_return(&active_count) > 1)
                         return 0;
-                sysfs_remove_group(&new_policy->kobj,
+                sysfs_remove_group(cpufreq_global_kobject,
                                 &savagedzen_attr_group);
 
                 pm_idle = pm_idle_old;

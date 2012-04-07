@@ -59,19 +59,25 @@ static int pwm_backlight_update_status(struct backlight_device *bl)
 	int brightness = bl->props.brightness;
 	int max = bl->props.max_brightness;
 
-	if (bl->props.power != FB_BLANK_UNBLANK)
+	if (bl->props.power != FB_BLANK_UNBLANK){
 		brightness = 0;
+		printk("No brightness 1\n");
+	}
 
-	if (bl->props.fb_blank != FB_BLANK_UNBLANK)
+	if (bl->props.fb_blank != FB_BLANK_UNBLANK) {
 		brightness = 0;
+		printk("No brightness 2\n");
+	}
 
 	if (pb->notify)
 		brightness = pb->notify(pb->dev, brightness);
 
 	if (brightness == 0) {
+		printk("No brightness 3\n");
 		pwm_config(pb->pwm, 0, pb->period);
 		pwm_disable(pb->pwm);
 	} else {
+		printk("Enable brightness \n");
 		pwm_config(pb->pwm, asus_remapped_brightness[brightness] * (pb->period / 100) / max, pb->period);
 		pwm_enable(pb->pwm);
 	}
@@ -176,6 +182,7 @@ static int pwm_backlight_remove(struct platform_device *pdev)
 	struct backlight_device *bl = platform_get_drvdata(pdev);
 	struct pwm_bl_data *pb = dev_get_drvdata(&bl->dev);
 
+	printk("Backlight removed\n");
 	backlight_device_unregister(bl);
 	pwm_config(pb->pwm, 0, pb->period);
 	pwm_disable(pb->pwm);
@@ -195,6 +202,7 @@ static int pwm_backlight_suspend(struct platform_device *pdev,
 
 	if (pb->notify)
 		pb->notify(pb->dev, 0);
+	printk("pwm_backlight_suspend \n");
 	pwm_config(pb->pwm, 0, pb->period);
 	pwm_disable(pb->pwm);
 	if (pb->notify_after)
