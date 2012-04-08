@@ -5,7 +5,7 @@
 #include <linux/device.h>
 #include <linux/string.h>
 #include <linux/pm_runtime.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <linux/jiffies.h>
 #include "power.h"
 
@@ -116,12 +116,14 @@ static ssize_t control_store(struct device * dev, struct device_attribute *attr,
 	cp = memchr(buf, '\n', n);
 	if (cp)
 		len = cp - buf;
+	device_lock(dev);
 	if (len == sizeof ctrl_auto - 1 && strncmp(buf, ctrl_auto, len) == 0)
 		pm_runtime_allow(dev);
 	else if (len == sizeof ctrl_on - 1 && strncmp(buf, ctrl_on, len) == 0)
 		pm_runtime_forbid(dev);
 	else
-		return -EINVAL;
+		n = -EINVAL;
+	device_unlock(dev);
 	return n;
 }
 
@@ -205,15 +207,18 @@ static ssize_t autosuspend_delay_ms_store(struct device *dev,
 	if (strict_strtol(buf, 10, &delay) != 0 || delay != (int) delay)
 		return -EINVAL;
 
+	device_lock(dev);
 	pm_runtime_set_autosuspend_delay(dev, delay);
+	device_unlock(dev);
 	return n;
 }
 
 static DEVICE_ATTR(autosuspend_delay_ms, 0644, autosuspend_delay_ms_show,
 		autosuspend_delay_ms_store);
 
-#endif
+#endif /* CONFIG_PM_RUNTIME */
 
+#ifdef CONFIG_PM_SLEEP
 static ssize_t
 wake_show(struct device * dev, struct device_attribute *attr, char * buf)
 {
@@ -248,7 +253,6 @@ wake_store(struct device * dev, struct device_attribute *attr,
 
 static DEVICE_ATTR(wakeup, 0644, wake_show, wake_store);
 
-#ifdef CONFIG_PM_SLEEP
 static ssize_t wakeup_count_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {

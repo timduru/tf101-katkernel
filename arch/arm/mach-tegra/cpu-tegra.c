@@ -7,7 +7,7 @@
  *	Colin Cross <ccross@google.com>
  *	Based on arch/arm/plat-omap/cpu-omap.c, (C) 2005 Nokia Corporation
  *
- * Copyright (C) 2010-2011 NVIDIA Corporation
+ * Copyright (C) 2010-2012 NVIDIA Corporation
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -36,12 +36,12 @@
 
 #include <asm/system.h>
 
-#include <mach/hardware.h>
 #include <mach/clk.h>
 #include <mach/edp.h>
 
 #include "clock.h"
 #include "cpu-tegra.h"
+#include "dvfs.h"
 
 /* tegra throttling and edp governors require frequencies in the table
    to be in ascending order */
@@ -228,11 +228,14 @@ int tegra_edp_update_thermal_zone(int temperature)
 	mutex_lock(&tegra_cpu_lock);
 	edp_thermal_index = index;
 
-	/* Update cpu rate if cpufreq (at least on cpu0) is already started */
+	/* Update cpu rate if cpufreq (at least on cpu0) is already started;
+	   alter cpu dvfs table for this thermal zone if necessary */
+	tegra_cpu_dvfs_alter(edp_thermal_index, true);
 	if (target_cpu_speed[0]) {
 		edp_update_limit();
 		tegra_cpu_set_speed_cap(NULL);
 	}
+	tegra_cpu_dvfs_alter(edp_thermal_index, false);
 	mutex_unlock(&tegra_cpu_lock);
 
 	return ret;
@@ -451,7 +454,7 @@ unsigned int tegra_getspeed(unsigned int cpu)
 	rate = clk_get_rate(cpu_clk) / 1000;
 	return rate;
 }
-extern bool stress_test_enable;
+
 int tegra_update_cpu_speed(unsigned long rate)
 {
 	int ret = 0;
@@ -471,16 +474,28 @@ int tegra_update_cpu_speed(unsigned long rate)
 	 * Vote on memory bus frequency based on cpu frequency
 	 * This sets the minimum frequency, display or avp may request higher
 	 */
-	if (freqs.old < freqs.new)
-		clk_set_rate(emc_clk, tegra_emc_to_cpu_ratio(freqs.new));
+	if (freqs.old < freqs.new) {
+		ret = tegra_update_mselect_rate(freqs.new);
+		if (ret) {
+			pr_err("cpu-tegra: Failed to scale mselect for cpu"
+			       " frequency %u kHz\n", freqs.new);
+			return ret;
+		}
+		ret = clk_set_rate(emc_clk, tegra_emc_to_cpu_ratio(freqs.new));
+		if (ret) {
+			pr_err("cpu-tegra: Failed to scale emc for cpu"
+			       " frequency %u kHz\n", freqs.new);
+			return ret;
+		}
+	}
 
 	for_each_online_cpu(freqs.cpu)
 		cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
 
-//#ifdef CONFIG_CPU_FREQ_DEBUG
-	if(stress_test_enable)
-		printk(KERN_DEBUG "cpufreq-tegra: transition: %u --> %u\n",freqs.old, freqs.new);
-//#endif
+#ifdef CONFIG_CPU_FREQ_DEBUG
+	printk(KERN_DEBUG "cpufreq-tegra: transition: %u --> %u\n",
+	       freqs.old, freqs.new);
+#endif
 
 	ret = clk_set_rate(cpu_clk, freqs.new * 1000);
 	if (ret) {
@@ -492,8 +507,10 @@ int tegra_update_cpu_speed(unsigned long rate)
 	for_each_online_cpu(freqs.cpu)
 		cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
 
-	if (freqs.old > freqs.new)
+	if (freqs.old > freqs.new) {
 		clk_set_rate(emc_clk, tegra_emc_to_cpu_ratio(freqs.new));
+		tegra_update_mselect_rate(freqs.new);
+	}
 
 	return 0;
 }
@@ -560,6 +577,7 @@ int tegra_cpu_set_speed_cap(unsigned int *speed_cap)
 	if (speed_cap)
 		*speed_cap = new_speed;
 
+//	printk("set speed %d\n",new_speed);
 	ret = tegra_update_cpu_speed(new_speed);
 	if (ret == 0)
 		tegra_auto_hotplug_governor(new_speed, false);
@@ -645,7 +663,7 @@ static int tegra_cpu_init(struct cpufreq_policy *policy)
 	target_cpu_speed[policy->cpu] = policy->cur;
 
 	/* FIXME: what's the actual transition time? */
-	policy->cpuinfo.transition_latency = 400 * 1000;
+	policy->cpuinfo.transition_latency = 300 * 1000;
 
 	policy->shared_type = CPUFREQ_SHARED_TYPE_ALL;
 	cpumask_copy(policy->related_cpus, cpu_possible_mask);
@@ -675,6 +693,7 @@ static int tegra_cpufreq_policy_notifier(
 	if (event == CPUFREQ_NOTIFY) {
 		ret = cpufreq_frequency_table_target(policy, freq_table,
 			policy->max, CPUFREQ_RELATION_H, &i);
+//		printk("freq cpu(%d) %d - %d \n",policy->cpu,policy->max,freq_table[i].frequency);
 		policy_max_speed[policy->cpu] =
 			ret ? policy->max : freq_table[i].frequency;
 	}

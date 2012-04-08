@@ -9,6 +9,7 @@
 #include <linux/syscore_ops.h>
 #include <linux/mutex.h>
 #include <linux/module.h>
+#include <linux/interrupt.h>
 
 static LIST_HEAD(syscore_ops_list);
 static DEFINE_MUTEX(syscore_ops_lock);
@@ -36,11 +37,7 @@ void unregister_syscore_ops(struct syscore_ops *ops)
 	mutex_unlock(&syscore_ops_lock);
 }
 EXPORT_SYMBOL_GPL(unregister_syscore_ops);
-extern struct timer_list suspend_timer;
-extern void suspend_worker_timeout(unsigned long data);
-extern void watchdog_enable(int sec);
-extern void watchdog_disable(void);
-extern void auto_dump_kernel_log(void);
+
 #ifdef CONFIG_PM_SLEEP
 /**
  * syscore_suspend - Execute all the registered system core suspend callbacks.
@@ -52,12 +49,15 @@ int syscore_suspend(void)
 	struct syscore_ops *ops;
 	int ret = 0;
 
+	pr_debug("Checking wakeup interrupts\n");
+
+	/* Return error code if there are any wakeup interrupts pending. */
+	ret = check_wakeup_irqs();
+	if (ret)
+		return ret;
+
 	WARN_ONCE(!irqs_disabled(),
 		"Interrupts enabled before system core suspend.\n");
-
-	watchdog_disable();
-	del_timer_sync(&suspend_timer);
-	destroy_timer_on_stack(&suspend_timer);
 
 	list_for_each_entry_reverse(ops, &syscore_ops_list, node)
 		if (ops->suspend) {
@@ -103,13 +103,6 @@ void syscore_resume(void)
 			WARN_ONCE(!irqs_disabled(),
 				"Interrupts enabled after %pF\n", ops->resume);
 		}
-
-	init_timer_on_stack(&suspend_timer);
-	suspend_timer.expires = jiffies + HZ * 12;
-	suspend_timer.function = suspend_worker_timeout;
-	add_timer(&suspend_timer);
-	watchdog_enable(14);
-	auto_dump_kernel_log();
 }
 EXPORT_SYMBOL_GPL(syscore_resume);
 #endif /* CONFIG_PM_SLEEP */
@@ -125,7 +118,7 @@ void syscore_shutdown(void)
 
 	list_for_each_entry_reverse(ops, &syscore_ops_list, node)
 		if (ops->shutdown) {
-			//if (initcall_debug)
+			if (initcall_debug)
 				pr_info("PM: Calling %pF\n", ops->shutdown);
 			ops->shutdown();
 		}
