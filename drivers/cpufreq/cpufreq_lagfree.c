@@ -501,17 +501,20 @@ static inline void dbs_timer_exit(void)
 }
 
 static void lagfree_early_suspend(struct early_suspend *handler) {
+	printk("lagfree suspend\n");
 	suspended = 1;
 }
 
 static void lagfree_late_resume(struct early_suspend *handler) {
+	printk("lagfree resume\n");
 	suspended = 0;
 }
 
 static struct early_suspend lagfree_power_suspend = {
 	.suspend = lagfree_early_suspend,
 	.resume = lagfree_late_resume,
-	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1,
+//	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1,
+	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1,
 };
 
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,

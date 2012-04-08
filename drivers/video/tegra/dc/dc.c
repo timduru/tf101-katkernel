@@ -1744,7 +1744,6 @@ tegra_dc_config_pwm(struct tegra_dc *dc, struct tegra_dc_pwm_params *cfg)
 	unsigned long out_sel;
 	unsigned long cmd_state;
 
-	printk("tegra_dc_config_pwm\n");
 	mutex_lock(&dc->lock);
 	if (!dc->enabled) {
 		mutex_unlock(&dc->lock);
@@ -3066,8 +3065,6 @@ static int tegra_dc_resume(struct nvhost_device *ndev)
 {
 	struct tegra_dc *dc = nvhost_get_drvdata(ndev);
 
-	printk("DC resume\n");
-	
 	dev_info(&ndev->dev, "resume\n");
 
 	mutex_lock(&dc->lock);
