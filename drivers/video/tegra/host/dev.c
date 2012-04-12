@@ -77,6 +77,7 @@ struct nvhost_ctrl_userctx {
  */
 static void trace_write_cmdbufs(struct nvhost_job *job)
 {
+#if defined(CONFIG_TEGRA_NVMAP)
 	struct nvmap_handle_ref handle;
 	void *mem = NULL;
 	int i = 0;
@@ -108,6 +109,7 @@ static void trace_write_cmdbufs(struct nvhost_job *job)
 			nvmap_munmap(&handle, mem);
 		}
 	}
+#endif
 }
 
 static int nvhost_channelrelease(struct inode *inode, struct file *filp)
@@ -255,35 +257,38 @@ static ssize_t nvhost_channelwrite(struct file *filp, const char __user *buf,
 				cmdbuf.mem, cmdbuf.words, cmdbuf.offset);
 			hdr->num_cmdbufs--;
 		} else if (hdr->num_relocs) {
+			struct nvmap_pinarray_elem *elem =
+						&job->pinarray[job->num_pins];
 			consumed = sizeof(struct nvhost_reloc);
 			if (remaining < consumed)
 				break;
-			if (copy_from_user(&job->pinarray[job->num_pins],
-					buf, consumed)) {
+			if (copy_from_user(elem, buf, consumed)) {
 				err = -EFAULT;
 				break;
 			}
+			elem->patch_mem =
+				nvmap_convert_handle_u2k(elem->patch_mem);
+			elem->pin_mem =
+				nvmap_convert_handle_u2k(elem->pin_mem);
 			trace_nvhost_channel_write_reloc(chname);
 			job->num_pins++;
 			hdr->num_relocs--;
 		} else if (hdr->num_waitchks) {
-			int numwaitchks =
-				(remaining / sizeof(struct nvhost_waitchk));
-			if (!numwaitchks)
+			struct nvhost_waitchk *waitchk =
+					&job->waitchk[job->num_waitchk];
+			consumed = sizeof(struct nvhost_waitchk);
+			if (remaining < consumed)
 				break;
-			numwaitchks = min_t(int,
-				numwaitchks, hdr->num_waitchks);
-			consumed = numwaitchks * sizeof(struct nvhost_waitchk);
-			if (copy_from_user(&job->waitchk[job->num_waitchk],
-					buf, consumed)) {
+			if (copy_from_user(waitchk, buf, consumed)) {
 				err = -EFAULT;
 				break;
 			}
+			waitchk->mem = nvmap_convert_handle_u2k(waitchk->mem);
 			trace_nvhost_channel_write_waitchks(
-			  chname, numwaitchks,
+			  chname, 1,
 			  hdr->waitchk_mask);
-			job->num_waitchk += numwaitchks;
-			hdr->num_waitchks -= numwaitchks;
+			job->num_waitchk++;
+			hdr->num_waitchks--;
 		} else if (priv->num_relocshifts) {
 			int next_shift =
 				job->num_pins - priv->num_relocshifts;

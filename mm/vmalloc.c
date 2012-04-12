@@ -1617,6 +1617,8 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 		return NULL;
 
 	addr = __vmalloc_area_node(area, gfp_mask, prot, node, caller);
+	if (!addr)
+		return NULL;
 
 	/*
 	 * A ref_count = 3 is needed because the vm_struct and vmap_area

@@ -141,14 +141,14 @@ static inline int tegra_dc_fmt_bpp(int fmt)
 	case TEGRA_WIN_FMT_YUV420P:
 	case TEGRA_WIN_FMT_YCbCr422P:
 	case TEGRA_WIN_FMT_YUV422P:
-		return 8;
-
-	case TEGRA_WIN_FMT_YCbCr422:
-	case TEGRA_WIN_FMT_YUV422:
 	case TEGRA_WIN_FMT_YCbCr422R:
 	case TEGRA_WIN_FMT_YUV422R:
 	case TEGRA_WIN_FMT_YCbCr422RA:
 	case TEGRA_WIN_FMT_YUV422RA:
+               return 8;
+
+       case TEGRA_WIN_FMT_YCbCr422:
+       case TEGRA_WIN_FMT_YUV422:
 		/* FIXME: need to know the bpp of these formats */
 		return 0;
 	}
@@ -162,6 +162,10 @@ static inline bool tegra_dc_is_yuv_planar(int fmt)
 	case TEGRA_WIN_FMT_YCbCr420P:
 	case TEGRA_WIN_FMT_YCbCr422P:
 	case TEGRA_WIN_FMT_YUV422P:
+       case TEGRA_WIN_FMT_YCbCr422R:
+       case TEGRA_WIN_FMT_YUV422R:
+       case TEGRA_WIN_FMT_YCbCr422RA:
+       case TEGRA_WIN_FMT_YUV422RA:		
 		return true;
 	}
 	return false;
@@ -982,7 +986,24 @@ unsigned long tegra_dc_get_bandwidth(struct tegra_dc_win *windows[], int n)
 
 	return tegra_dc_find_max_bandwidth(windows, n);
 }
+/* program bandwidth needs if higher than old bandwidth */
+static void tegra_dc_increase_bandwidth(struct tegra_dc *dc)
+{
+       unsigned i;
 
+       if (dc->emc_clk_rate < dc->new_emc_clk_rate) {
+               dc->emc_clk_rate = dc->new_emc_clk_rate;
+               clk_set_rate(dc->emc_clk, dc->emc_clk_rate);
+       }
+
+       for (i = 0; i < DC_N_WINDOWS; i++) {
+               struct tegra_dc_win *w = &dc->windows[i];
+               if (w->bandwidth < w->new_bandwidth && w->new_bandwidth != 0)
+                       tegra_dc_set_latency_allowance(dc, w);
+       }
+}
+
+/* program the current bandwidth */
 static void tegra_dc_program_bandwidth(struct tegra_dc *dc)
 {
 	unsigned i;
@@ -1240,7 +1261,8 @@ int tegra_dc_update_windows(struct tegra_dc_win *windows[], int n)
 	}
 
 	tegra_dc_set_dynamic_emc(windows, n);
-
+       tegra_dc_increase_bandwidth(dc);
+	
 	tegra_dc_writel(dc, update_mask << 8, DC_CMD_STATE_CONTROL);
 
 	tegra_dc_writel(dc, FRAME_END_INT | V_BLANK_INT, DC_CMD_INT_STATUS);
@@ -1980,7 +2002,7 @@ static void tegra_dc_vblank(struct work_struct *work)
 	}
 }
 
-#ifndef CONFIG_TEGRA_FPGA_PLATFORM
+
 static void tegra_dc_underflow_handler(struct tegra_dc *dc)
 {
 	u32 val, i;
@@ -2012,6 +2034,19 @@ static void tegra_dc_underflow_handler(struct tegra_dc *dc)
 
 	/* Clear the underflow mask now that we've checked it. */
 	dc->underflow_mask = 0;
+}
+
+#ifndef CONFIG_TEGRA_FPGA_PLATFORM
+static bool tegra_dc_windows_are_dirty(struct tegra_dc *dc)
+{
+#ifndef CONFIG_TEGRA_SIMULATION_PLATFORM
+	u32 val;
+
+	val = tegra_dc_readl(dc, DC_CMD_STATE_CONTROL);
+	if (val & (WIN_A_UPDATE | WIN_B_UPDATE | WIN_C_UPDATE))
+	    return true;
+#endif
+	return false;
 }
 
 static void tegra_dc_trigger_windows(struct tegra_dc *dc)
@@ -2074,7 +2109,7 @@ static void tegra_dc_one_shot_irq(struct tegra_dc *dc, unsigned long status)
 		tegra_dc_underflow_handler(dc);
 
 		/* Mark the frame_end as complete. */
-		if (completion_done(&dc->frame_end_complete))
+               if (!completion_done(&dc->frame_end_complete))
 			complete(&dc->frame_end_complete);
 	}
 }
@@ -2091,7 +2126,7 @@ static void tegra_dc_continuous_irq(struct tegra_dc *dc, unsigned long status)
 
 	if (status & FRAME_END_INT) {
 		/* Mark the frame_end as complete. */
-		if (completion_done(&dc->frame_end_complete))
+               if (!completion_done(&dc->frame_end_complete))			
 			complete(&dc->frame_end_complete);
 
 		tegra_dc_trigger_windows(dc);

@@ -23,9 +23,9 @@
 #define _NVHOST_T20_H_
 
 struct nvhost_master;
+struct nvhost_module;
 
 int nvhost_init_t20_channel_support(struct nvhost_master *);
-int nvhost_init_t20_cdma_support(struct nvhost_master *);
 int nvhost_init_t20_debug_support(struct nvhost_master *);
 int nvhost_init_t20_syncpt_support(struct nvhost_master *);
 int nvhost_init_t20_intr_support(struct nvhost_master *);

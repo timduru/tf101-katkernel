@@ -2642,6 +2642,14 @@ struct regulator_dev *regulator_register(struct regulator_desc *regulator_desc,
 			dev_get_drvdata(init_data->supply_regulator_dev));
 		if (ret < 0)
 			goto scrub;
+
+		/* Enable supply if rail is enabled */
+		if (rdev->desc->ops->is_enabled &&
+				rdev->desc->ops->is_enabled(rdev)) {
+			ret = regulator_enable(rdev->supply);
+			if (ret < 0)
+				goto scrub;
+		}
 	}
 
 	/* add consumers devices */
