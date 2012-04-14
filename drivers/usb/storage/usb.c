@@ -440,6 +440,7 @@ static void adjust_quirks(struct us_data *us)
 			US_FL_NOT_LOCKABLE | US_FL_MAX_SECTORS_64 |
 			US_FL_CAPACITY_OK | US_FL_IGNORE_RESIDUE |
 			US_FL_SINGLE_LUN | US_FL_NO_WP_DETECT |
+			US_FL_NO_READ_DISC_INFO | US_FL_NO_READ_CAPACITY_16 |
 			US_FL_INITIAL_READ10);
 
 	p = quirks;
@@ -471,6 +472,12 @@ static void adjust_quirks(struct us_data *us)
 			break;
 		case 'c':
 			f |= US_FL_FIX_CAPACITY;
+			break;
+		case 'd':
+			f |= US_FL_NO_READ_DISC_INFO;
+			break;
+		case 'e':
+			f |= US_FL_NO_READ_CAPACITY_16;
 			break;
 		case 'h':
 			f |= US_FL_CAPACITY_HEURISTICS;
@@ -823,15 +830,23 @@ static int usb_stor_scan_thread(void * __us)
 	struct device *dev = &us->pusb_intf->dev;
 
 	dev_dbg(dev, "device found\n");
-	wake_lock_init(&us->scsi_scan_wake_lock, WAKE_LOCK_SUSPEND, us->scsi_name);
-	wake_lock(&us->scsi_scan_wake_lock);
-	printk("%s wake_lock_init +\n", us->scsi_name);
-	set_freezable();
-	/* Wait for the timeout to expire or for a disconnect */
+
+	set_freezable_with_signal();
+	/*
+	 * Wait for the timeout to expire or for a disconnect
+	 *
+	 * We can't freeze in this thread or we risk causing khubd to
+	 * fail to freeze, but we can't be non-freezable either. Nor can
+	 * khubd freeze while waiting for scanning to complete as it may
+	 * hold the device lock, causing a hang when suspending devices.
+	 * So we request a fake signal when freezing and use
+	 * interruptible sleep to kick us out of our wait early when
+	 * freezing happens.
+	 */
 	if (delay_use > 0) {
 		dev_dbg(dev, "waiting for device to settle "
 				"before scanning\n");
-		wait_event_freezable_timeout(us->delay_wait,
+		wait_event_interruptible_timeout(us->delay_wait,
 				test_bit(US_FLIDX_DONT_SCAN, &us->dflags),
 				delay_use * HZ);
 	}
@@ -848,16 +863,12 @@ static int usb_stor_scan_thread(void * __us)
 		}
 		scsi_scan_host(us_to_host(us));
 		dev_dbg(dev, "scan complete\n");
+
 		/* Should we unbind if no devices were detected? */
 	}
 
-	wake_unlock(&us->scsi_scan_wake_lock);
-	wake_lock_destroy(&us->scsi_scan_wake_lock);
-	printk("%s wake_lock_destroy -\n", us->scsi_name);
-
 	usb_autopm_put_interface(us->pusb_intf);
 	complete_and_exit(&us->scanning_done, 0);
-
 }
 
 static unsigned int usb_stor_sg_tablesize(struct usb_interface *intf)
@@ -969,7 +980,6 @@ int usb_stor_probe2(struct us_data *us)
 		goto BadDevice;
 	snprintf(us->scsi_name, sizeof(us->scsi_name), "usb-storage %s",
 					dev_name(&us->pusb_intf->dev));
-
 	result = scsi_add_host(us_to_host(us), dev);
 	if (result) {
 		dev_warn(dev,
@@ -1063,6 +1073,7 @@ static struct usb_driver usb_storage_driver = {
 	.id_table =	usb_storage_usb_ids,
 	.supports_autosuspend = 1,
 	.soft_unbind =	1,
+	.no_dynamic_id = 1,
 };
 
 static int __init usb_stor_init(void)

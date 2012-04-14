@@ -755,6 +755,126 @@ lpfc_issue_reset(struct device *dev, struct device_attribute *attr,
 }
 
 /**
+ * lpfc_sli4_pdev_status_reg_wait - Wait for pdev status register for readyness
+ * @phba: lpfc_hba pointer.
+ *
+ * Description:
+ * SLI4 interface type-2 device to wait on the sliport status register for
+ * the readyness after performing a firmware reset.
+ *
+ * Returns:
+ * zero for success
+ **/
+static int
+lpfc_sli4_pdev_status_reg_wait(struct lpfc_hba *phba)
+{
+	struct lpfc_register portstat_reg;
+	int i;
+
+
+	lpfc_readl(phba->sli4_hba.u.if_type2.STATUSregaddr,
+		   &portstat_reg.word0);
+
+	/* wait for the SLI port firmware ready after firmware reset */
+	for (i = 0; i < LPFC_FW_RESET_MAXIMUM_WAIT_10MS_CNT; i++) {
+		msleep(10);
+		lpfc_readl(phba->sli4_hba.u.if_type2.STATUSregaddr,
+			   &portstat_reg.word0);
+		if (!bf_get(lpfc_sliport_status_err, &portstat_reg))
+			continue;
+		if (!bf_get(lpfc_sliport_status_rn, &portstat_reg))
+			continue;
+		if (!bf_get(lpfc_sliport_status_rdy, &portstat_reg))
+			continue;
+		break;
+	}
+
+	if (i < LPFC_FW_RESET_MAXIMUM_WAIT_10MS_CNT)
+		return 0;
+	else
+		return -EIO;
+}
+
+/**
+ * lpfc_sli4_pdev_reg_request - Request physical dev to perform a register acc
+ * @phba: lpfc_hba pointer.
+ *
+ * Description:
+ * Request SLI4 interface type-2 device to perform a physical register set
+ * access.
+ *
+ * Returns:
+ * zero for success
+ **/
+static ssize_t
+lpfc_sli4_pdev_reg_request(struct lpfc_hba *phba, uint32_t opcode)
+{
+	struct completion online_compl;
+	struct pci_dev *pdev = phba->pcidev;
+	uint32_t reg_val;
+	int status = 0;
+	int rc;
+
+	if (!phba->cfg_enable_hba_reset)
+		return -EIO;
+
+	if ((phba->sli_rev < LPFC_SLI_REV4) ||
+	    (bf_get(lpfc_sli_intf_if_type, &phba->sli4_hba.sli_intf) !=
+	     LPFC_SLI_INTF_IF_TYPE_2))
+		return -EPERM;
+
+	if (!pdev->is_physfn)
+		return -EPERM;
+
+	/* Disable SR-IOV virtual functions if enabled */
+	if (phba->cfg_sriov_nr_virtfn) {
+		pci_disable_sriov(pdev);
+		phba->cfg_sriov_nr_virtfn = 0;
+	}
+	status = lpfc_do_offline(phba, LPFC_EVT_OFFLINE);
+
+	if (status != 0)
+		return status;
+
+	/* wait for the device to be quiesced before firmware reset */
+	msleep(100);
+
+	reg_val = readl(phba->sli4_hba.conf_regs_memmap_p +
+			LPFC_CTL_PDEV_CTL_OFFSET);
+
+	if (opcode == LPFC_FW_DUMP)
+		reg_val |= LPFC_FW_DUMP_REQUEST;
+	else if (opcode == LPFC_FW_RESET)
+		reg_val |= LPFC_CTL_PDEV_CTL_FRST;
+	else if (opcode == LPFC_DV_RESET)
+		reg_val |= LPFC_CTL_PDEV_CTL_DRST;
+
+	writel(reg_val, phba->sli4_hba.conf_regs_memmap_p +
+	       LPFC_CTL_PDEV_CTL_OFFSET);
+	/* flush */
+	readl(phba->sli4_hba.conf_regs_memmap_p + LPFC_CTL_PDEV_CTL_OFFSET);
+
+	/* delay driver action following IF_TYPE_2 reset */
+	rc = lpfc_sli4_pdev_status_reg_wait(phba);
+
+	if (rc)
+		return -EIO;
+
+	init_completion(&online_compl);
+	rc = lpfc_workq_post_event(phba, &status, &online_compl,
+				   LPFC_EVT_ONLINE);
+	if (rc == 0)
+		return -ENOMEM;
+
+	wait_for_completion(&online_compl);
+
+	if (status != 0)
+		return -EIO;
+
+	return 0;
+}
+
+/**
  * lpfc_nport_evt_cnt_show - Return the number of nport events
  * @dev: class device that is converted into a Scsi_host.
  * @attr: device attribute, not used.
@@ -828,6 +948,10 @@ lpfc_board_mode_store(struct device *dev, struct device_attribute *attr,
 
 	if (!phba->cfg_enable_hba_reset)
 		return -EACCES;
+
+	lpfc_printf_vlog(vport, KERN_ERR, LOG_INIT,
+		"3050 lpfc_board_mode set to %s\n", buf);
+
 	init_completion(&online_compl);
 
 	if(strncmp(buf, "online", sizeof("online") - 1) == 0) {
@@ -848,6 +972,12 @@ lpfc_board_mode_store(struct device *dev, struct device_attribute *attr,
 			return -EINVAL;
 		else
 			status = lpfc_do_offline(phba, LPFC_EVT_KILL);
+	else if (strncmp(buf, "dump", sizeof("dump") - 1) == 0)
+		status = lpfc_sli4_pdev_reg_request(phba, LPFC_FW_DUMP);
+	else if (strncmp(buf, "fw_reset", sizeof("fw_reset") - 1) == 0)
+		status = lpfc_sli4_pdev_reg_request(phba, LPFC_FW_RESET);
+	else if (strncmp(buf, "dv_reset", sizeof("dv_reset") - 1) == 0)
+		status = lpfc_sli4_pdev_reg_request(phba, LPFC_DV_RESET);
 	else
 		return -EINVAL;
 
@@ -1217,6 +1347,10 @@ lpfc_poll_store(struct device *dev, struct device_attribute *attr,
 	if (phba->sli_rev == LPFC_SLI_REV4)
 		val = 0;
 
+	lpfc_printf_vlog(vport, KERN_ERR, LOG_INIT,
+		"3051 lpfc_poll changed from %d to %d\n",
+		phba->cfg_poll, val);
+
 	spin_lock_irq(&phba->hbalock);
 
 	old_val = phba->cfg_poll;
@@ -1319,6 +1453,32 @@ lpfc_dss_show(struct device *dev, struct device_attribute *attr,
 			(phba->cfg_enable_dss) ? "Enabled" : "Disabled",
 			(phba->sli3_options & LPFC_SLI3_DSS_ENABLED) ?
 				"" : "Not ");
+}
+
+/**
+ * lpfc_sriov_hw_max_virtfn_show - Return maximum number of virtual functions
+ * @dev: class converted to a Scsi_host structure.
+ * @attr: device attribute, not used.
+ * @buf: on return contains the formatted support level.
+ *
+ * Description:
+ * Returns the maximum number of virtual functions a physical function can
+ * support, 0 will be returned if called on virtual function.
+ *
+ * Returns: size of formatted string.
+ **/
+static ssize_t
+lpfc_sriov_hw_max_virtfn_show(struct device *dev,
+			      struct device_attribute *attr,
+			      char *buf)
+{
+	struct Scsi_Host *shost = class_to_shost(dev);
+	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
+	struct lpfc_hba *phba = vport->phba;
+	uint16_t max_nr_virtfn;
+
+	max_nr_virtfn = lpfc_sli_sriov_nr_virtfn_get(phba);
+	return snprintf(buf, PAGE_SIZE, "%d\n", max_nr_virtfn);
 }
 
 /**
@@ -1436,6 +1596,9 @@ static int \
 lpfc_##attr##_set(struct lpfc_hba *phba, uint val) \
 { \
 	if (val >= minval && val <= maxval) {\
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT, \
+			"3052 lpfc_" #attr " changed from %d to %d\n", \
+			phba->cfg_##attr, val); \
 		phba->cfg_##attr = val;\
 		return 0;\
 	}\
@@ -1593,6 +1756,9 @@ static int \
 lpfc_##attr##_set(struct lpfc_vport *vport, uint val) \
 { \
 	if (val >= minval && val <= maxval) {\
+		lpfc_printf_vlog(vport, KERN_ERR, LOG_INIT, \
+			"3053 lpfc_" #attr " changed from %d to %d\n", \
+			vport->cfg_##attr, val); \
 		vport->cfg_##attr = val;\
 		return 0;\
 	}\
@@ -1762,6 +1928,8 @@ static DEVICE_ATTR(lpfc_temp_sensor, S_IRUGO, lpfc_temp_sensor_show, NULL);
 static DEVICE_ATTR(lpfc_fips_level, S_IRUGO, lpfc_fips_level_show, NULL);
 static DEVICE_ATTR(lpfc_fips_rev, S_IRUGO, lpfc_fips_rev_show, NULL);
 static DEVICE_ATTR(lpfc_dss, S_IRUGO, lpfc_dss_show, NULL);
+static DEVICE_ATTR(lpfc_sriov_hw_max_virtfn, S_IRUGO,
+		   lpfc_sriov_hw_max_virtfn_show, NULL);
 
 static char *lpfc_soft_wwn_key = "C99G71SL8032A";
 
@@ -2024,6 +2192,9 @@ MODULE_PARM_DESC(lpfc_enable_npiv, "Enable NPIV functionality");
 lpfc_param_show(enable_npiv);
 lpfc_param_init(enable_npiv, 1, 0, 1);
 static DEVICE_ATTR(lpfc_enable_npiv, S_IRUGO, lpfc_enable_npiv_show, NULL);
+
+LPFC_ATTR_R(fcf_failover_policy, 1, 1, 2,
+	"FCF Fast failover=1 Priority failover=2");
 
 int lpfc_enable_rrq;
 module_param(lpfc_enable_rrq, int, S_IRUGO);
@@ -2507,6 +2678,9 @@ lpfc_topology_store(struct device *dev, struct device_attribute *attr,
 		if (nolip)
 			return strlen(buf);
 
+		lpfc_printf_vlog(vport, KERN_ERR, LOG_INIT,
+			"3054 lpfc_topology changed from %d to %d\n",
+			prev_val, val);
 		err = lpfc_issue_lip(lpfc_shost_from_vport(phba->pport));
 		if (err) {
 			phba->cfg_topology = prev_val;
@@ -2930,6 +3104,10 @@ lpfc_link_speed_store(struct device *dev, struct device_attribute *attr,
 	if (sscanf(val_buf, "%i", &val) != 1)
 		return -EINVAL;
 
+	lpfc_printf_vlog(vport, KERN_ERR, LOG_INIT,
+		"3055 lpfc_link_speed changed from %d to %d %s\n",
+		phba->cfg_link_speed, val, nolip ? "(nolip)" : "(lip)");
+
 	if (((val == LPFC_USER_LINK_SPEED_1G) && !(phba->lmt & LMT_1Gb)) ||
 	    ((val == LPFC_USER_LINK_SPEED_2G) && !(phba->lmt & LMT_2Gb)) ||
 	    ((val == LPFC_USER_LINK_SPEED_4G) && !(phba->lmt & LMT_4Gb)) ||
@@ -3014,7 +3192,7 @@ static DEVICE_ATTR(lpfc_link_speed, S_IRUGO | S_IWUSR,
  *
  * @dev: class device that is converted into a Scsi_host.
  * @attr: device attribute, not used.
- * @buf: containing the string "selective".
+ * @buf: containing enable or disable aer flag.
  * @count: unused variable.
  *
  * Description:
@@ -3098,7 +3276,7 @@ lpfc_param_show(aer_support)
 /**
  * lpfc_aer_support_init - Set the initial adapters aer support flag
  * @phba: lpfc_hba pointer.
- * @val: link speed value.
+ * @val: enable aer or disable aer flag.
  *
  * Description:
  * If val is in a valid range [0,1], then set the adapter's initial
@@ -3137,7 +3315,7 @@ static DEVICE_ATTR(lpfc_aer_support, S_IRUGO | S_IWUSR,
  * lpfc_aer_cleanup_state - Clean up aer state to the aer enabled device
  * @dev: class device that is converted into a Scsi_host.
  * @attr: device attribute, not used.
- * @buf: containing the string "selective".
+ * @buf: containing flag 1 for aer cleanup state.
  * @count: unused variable.
  *
  * Description:
@@ -3179,6 +3357,136 @@ lpfc_aer_cleanup_state(struct device *dev, struct device_attribute *attr,
 
 static DEVICE_ATTR(lpfc_aer_state_cleanup, S_IWUSR, NULL,
 		   lpfc_aer_cleanup_state);
+
+/**
+ * lpfc_sriov_nr_virtfn_store - Enable the adapter for sr-iov virtual functions
+ *
+ * @dev: class device that is converted into a Scsi_host.
+ * @attr: device attribute, not used.
+ * @buf: containing the string the number of vfs to be enabled.
+ * @count: unused variable.
+ *
+ * Description:
+ * When this api is called either through user sysfs, the driver shall
+ * try to enable or disable SR-IOV virtual functions according to the
+ * following:
+ *
+ * If zero virtual function has been enabled to the physical function,
+ * the driver shall invoke the pci enable virtual function api trying
+ * to enable the virtual functions. If the nr_vfn provided is greater
+ * than the maximum supported, the maximum virtual function number will
+ * be used for invoking the api; otherwise, the nr_vfn provided shall
+ * be used for invoking the api. If the api call returned success, the
+ * actual number of virtual functions enabled will be set to the driver
+ * cfg_sriov_nr_virtfn; otherwise, -EINVAL shall be returned and driver
+ * cfg_sriov_nr_virtfn remains zero.
+ *
+ * If none-zero virtual functions have already been enabled to the
+ * physical function, as reflected by the driver's cfg_sriov_nr_virtfn,
+ * -EINVAL will be returned and the driver does nothing;
+ *
+ * If the nr_vfn provided is zero and none-zero virtual functions have
+ * been enabled, as indicated by the driver's cfg_sriov_nr_virtfn, the
+ * disabling virtual function api shall be invoded to disable all the
+ * virtual functions and driver's cfg_sriov_nr_virtfn shall be set to
+ * zero. Otherwise, if zero virtual function has been enabled, do
+ * nothing.
+ *
+ * Returns:
+ * length of the buf on success if val is in range the intended mode
+ * is supported.
+ * -EINVAL if val out of range or intended mode is not supported.
+ **/
+static ssize_t
+lpfc_sriov_nr_virtfn_store(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+	struct Scsi_Host *shost = class_to_shost(dev);
+	struct lpfc_vport *vport = (struct lpfc_vport *)shost->hostdata;
+	struct lpfc_hba *phba = vport->phba;
+	struct pci_dev *pdev = phba->pcidev;
+	int val = 0, rc = -EINVAL;
+
+	/* Sanity check on user data */
+	if (!isdigit(buf[0]))
+		return -EINVAL;
+	if (sscanf(buf, "%i", &val) != 1)
+		return -EINVAL;
+	if (val < 0)
+		return -EINVAL;
+
+	/* Request disabling virtual functions */
+	if (val == 0) {
+		if (phba->cfg_sriov_nr_virtfn > 0) {
+			pci_disable_sriov(pdev);
+			phba->cfg_sriov_nr_virtfn = 0;
+		}
+		return strlen(buf);
+	}
+
+	/* Request enabling virtual functions */
+	if (phba->cfg_sriov_nr_virtfn > 0) {
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
+				"3018 There are %d virtual functions "
+				"enabled on physical function.\n",
+				phba->cfg_sriov_nr_virtfn);
+		return -EEXIST;
+	}
+
+	if (val <= LPFC_MAX_VFN_PER_PFN)
+		phba->cfg_sriov_nr_virtfn = val;
+	else {
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
+				"3019 Enabling %d virtual functions is not "
+				"allowed.\n", val);
+		return -EINVAL;
+	}
+
+	rc = lpfc_sli_probe_sriov_nr_virtfn(phba, phba->cfg_sriov_nr_virtfn);
+	if (rc) {
+		phba->cfg_sriov_nr_virtfn = 0;
+		rc = -EPERM;
+	} else
+		rc = strlen(buf);
+
+	return rc;
+}
+
+static int lpfc_sriov_nr_virtfn = LPFC_DEF_VFN_PER_PFN;
+module_param(lpfc_sriov_nr_virtfn, int, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(lpfc_sriov_nr_virtfn, "Enable PCIe device SR-IOV virtual fn");
+lpfc_param_show(sriov_nr_virtfn)
+
+/**
+ * lpfc_sriov_nr_virtfn_init - Set the initial sr-iov virtual function enable
+ * @phba: lpfc_hba pointer.
+ * @val: link speed value.
+ *
+ * Description:
+ * If val is in a valid range [0,255], then set the adapter's initial
+ * cfg_sriov_nr_virtfn field. If it's greater than the maximum, the maximum
+ * number shall be used instead. It will be up to the driver's probe_one
+ * routine to determine whether the device's SR-IOV is supported or not.
+ *
+ * Returns:
+ * zero if val saved.
+ * -EINVAL val out of range
+ **/
+static int
+lpfc_sriov_nr_virtfn_init(struct lpfc_hba *phba, int val)
+{
+	if (val >= 0 && val <= LPFC_MAX_VFN_PER_PFN) {
+		phba->cfg_sriov_nr_virtfn = val;
+		return 0;
+	}
+
+	lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
+			"3017 Enabling %d virtual functions is not "
+			"allowed.\n", val);
+	return -EINVAL;
+}
+static DEVICE_ATTR(lpfc_sriov_nr_virtfn, S_IRUGO | S_IWUSR,
+		   lpfc_sriov_nr_virtfn_show, lpfc_sriov_nr_virtfn_store);
 
 /*
 # lpfc_fcp_class:  Determines FC class to use for the FCP protocol.
@@ -3377,7 +3685,9 @@ LPFC_ATTR_R(enable_bg, 0, 0, 1, "Enable BlockGuard Support");
 #	- Default will result in registering capabilities for all profiles.
 #
 */
-unsigned int lpfc_prot_mask = SHOST_DIF_TYPE1_PROTECTION;
+unsigned int lpfc_prot_mask = SHOST_DIF_TYPE1_PROTECTION |
+			      SHOST_DIX_TYPE0_PROTECTION |
+			      SHOST_DIX_TYPE1_PROTECTION;
 
 module_param(lpfc_prot_mask, uint, S_IRUGO);
 MODULE_PARM_DESC(lpfc_prot_mask, "host protection mask");
@@ -3468,6 +3778,7 @@ struct device_attribute *lpfc_hba_attrs[] = {
 	&dev_attr_lpfc_fdmi_on,
 	&dev_attr_lpfc_max_luns,
 	&dev_attr_lpfc_enable_npiv,
+	&dev_attr_lpfc_fcf_failover_policy,
 	&dev_attr_lpfc_enable_rrq,
 	&dev_attr_nport_evt_cnt,
 	&dev_attr_board_mode,
@@ -3497,6 +3808,7 @@ struct device_attribute *lpfc_hba_attrs[] = {
 	&dev_attr_lpfc_prot_sg_seg_cnt,
 	&dev_attr_lpfc_aer_support,
 	&dev_attr_lpfc_aer_state_cleanup,
+	&dev_attr_lpfc_sriov_nr_virtfn,
 	&dev_attr_lpfc_suppress_link_up,
 	&dev_attr_lpfc_iocb_cnt,
 	&dev_attr_iocb_hw,
@@ -3505,6 +3817,7 @@ struct device_attribute *lpfc_hba_attrs[] = {
 	&dev_attr_lpfc_fips_level,
 	&dev_attr_lpfc_fips_rev,
 	&dev_attr_lpfc_dss,
+	&dev_attr_lpfc_sriov_hw_max_virtfn,
 	NULL,
 };
 
@@ -3961,7 +4274,7 @@ static struct bin_attribute sysfs_mbox_attr = {
 		.name = "mbox",
 		.mode = S_IRUSR | S_IWUSR,
 	},
-	.size = MAILBOX_CMD_SIZE,
+	.size = MAILBOX_SYSFS_MAX,
 	.read = sysfs_mbox_read,
 	.write = sysfs_mbox_write,
 };
@@ -4532,7 +4845,7 @@ lpfc_set_vport_symbolic_name(struct fc_vport *fc_vport)
  *
  * This function is called by the lpfc_get_cfgparam() routine to set the
  * module lpfc_log_verbose into the @phba cfg_log_verbose for use with
- * log messsage according to the module's lpfc_log_verbose parameter setting
+ * log message according to the module's lpfc_log_verbose parameter setting
  * before hba port or vport created.
  **/
 static void
@@ -4686,6 +4999,7 @@ lpfc_get_cfgparam(struct lpfc_hba *phba)
 	lpfc_link_speed_init(phba, lpfc_link_speed);
 	lpfc_poll_tmo_init(phba, lpfc_poll_tmo);
 	lpfc_enable_npiv_init(phba, lpfc_enable_npiv);
+	lpfc_fcf_failover_policy_init(phba, lpfc_fcf_failover_policy);
 	lpfc_enable_rrq_init(phba, lpfc_enable_rrq);
 	lpfc_use_msi_init(phba, lpfc_use_msi);
 	lpfc_fcp_imax_init(phba, lpfc_fcp_imax);
@@ -4705,6 +5019,7 @@ lpfc_get_cfgparam(struct lpfc_hba *phba)
 	lpfc_hba_queue_depth_init(phba, lpfc_hba_queue_depth);
 	lpfc_hba_log_verbose_init(phba, lpfc_log_verbose);
 	lpfc_aer_support_init(phba, lpfc_aer_support);
+	lpfc_sriov_nr_virtfn_init(phba, lpfc_sriov_nr_virtfn);
 	lpfc_suppress_link_up_init(phba, lpfc_suppress_link_up);
 	lpfc_iocb_cnt_init(phba, lpfc_iocb_cnt);
 	phba->cfg_enable_dss = 1;
