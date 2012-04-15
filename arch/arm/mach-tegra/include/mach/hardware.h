@@ -1,6 +1,4 @@
 /*
- * arch/arm/mach-tegra/include/mach/hardware.h
- *
  * Copyright (C) 2010 Google, Inc.
  * Copyright (C) 2011 NVIDIA Corp.
  *
@@ -16,11 +14,10 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 
-#ifndef __MACH_TEGRA_HARDWARE_H
-#define __MACH_TEGRA_HARDWARE_H
+#ifndef MACH_TEGRA_HARDWARE_H
+#define MACH_TEGRA_HARDWARE_H
 
 #if defined(CONFIG_ARCH_TEGRA_2x_SOC)
 #define PCIBIOS_MIN_IO				0x1000
@@ -46,9 +43,12 @@ enum tegra_revision {
 	TEGRA_REVISION_A02,
 	TEGRA_REVISION_A03,
 	TEGRA_REVISION_A03p,
+	TEGRA_REVISION_A04,
+	TEGRA_REVISION_A04p,
 	TEGRA_REVISION_MAX,
 };
 
 enum tegra_chipid tegra_get_chipid(void);
 enum tegra_revision tegra_get_revision(void);
+
 #endif

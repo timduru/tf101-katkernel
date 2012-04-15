@@ -29,6 +29,16 @@
 #define cpa_debug(x, ...)
 #endif
 
+#define FLUSH_CLEAN_BY_SET_WAY_PAGE_THRESHOLD 8
+extern void v7_flush_kern_cache_all(void *);
+extern void __flush_dcache_page(struct address_space *, struct page *);
+
+static void inner_flush_cache_all(void)
+{
+	on_each_cpu(v7_flush_kern_cache_all, NULL, 1);
+}
+
+#if defined(CONFIG_CPA)
 /*
  * The current flushing context - we pass it instead of 5 arguments:
  */
@@ -129,8 +139,16 @@ static void cpa_flush_array(unsigned long *start, int numpages, int cache,
 			    int in_flags, struct page **pages)
 {
 	unsigned int i, level;
+	bool flush_inner = true;
+	unsigned long base;
 
 	BUG_ON(irqs_disabled());
+
+	if (numpages >= FLUSH_CLEAN_BY_SET_WAY_PAGE_THRESHOLD &&
+		cache && in_flags & CPA_PAGES_ARRAY) {
+		inner_flush_cache_all();
+		flush_inner = false;
+	}
 
 	for (i = 0; i < numpages; i++) {
 		unsigned long addr;
@@ -143,8 +161,14 @@ static void cpa_flush_array(unsigned long *start, int numpages, int cache,
 
 		flush_tlb_kernel_range(addr, addr + PAGE_SIZE);
 
-		if (cache) {
-
+		if (cache && in_flags & CPA_PAGES_ARRAY) {
+			/* cache flush all pages including high mem pages. */
+			if (flush_inner)
+				__flush_dcache_page(
+					page_mapping(pages[i]), pages[i]);
+			base = page_to_phys(pages[i]);
+			outer_flush_range(base, base + PAGE_SIZE);
+		} else if (cache) {
 			pte = lookup_address(addr, &level);
 
 			/*
@@ -795,13 +819,13 @@ static int change_page_attr_set_clr(unsigned long *addr, int numpages,
 
 	ret = __change_page_attr_set_clr(&cpa, checkalias);
 
-	/*
-	 * Check whether we really changed something:
-	 */
-	if (!(cpa.flags & CPA_FLUSHTLB))
-		goto out;
-
 	cache = cache_attr(mask_set);
+	/*
+	 * Check whether we really changed something or
+	 * cache need to be flushed.
+	 */
+	if (!(cpa.flags & CPA_FLUSHTLB) && !cache)
+		goto out;
 
 	if (cpa.flags & (CPA_PAGES_ARRAY | CPA_ARRAY)) {
 		cpa_flush_array(addr, numpages, cache,
@@ -996,3 +1020,57 @@ int set_pages_array_iwb(struct page **pages, int addrinarray)
 			L_PTE_MT_INNER_WB, L_PTE_MT_MASK);
 }
 EXPORT_SYMBOL(set_pages_array_iwb);
+
+#else /* CONFIG_CPA */
+
+void update_page_count(int level, unsigned long pages)
+{
+}
+
+static void flush_cache(struct page **pages, int numpages)
+{
+	unsigned int i;
+	bool flush_inner = true;
+	unsigned long base;
+
+	if (numpages >= FLUSH_CLEAN_BY_SET_WAY_PAGE_THRESHOLD) {
+		inner_flush_cache_all();
+		flush_inner = false;
+	}
+
+	for (i = 0; i < numpages; i++) {
+		if (flush_inner)
+			__flush_dcache_page(page_mapping(pages[i]), pages[i]);
+		base = page_to_phys(pages[i]);
+		outer_flush_range(base, base + PAGE_SIZE);
+	}
+}
+
+int set_pages_array_uc(struct page **pages, int addrinarray)
+{
+	flush_cache(pages, addrinarray);
+	return 0;
+}
+EXPORT_SYMBOL(set_pages_array_uc);
+
+int set_pages_array_wc(struct page **pages, int addrinarray)
+{
+	flush_cache(pages, addrinarray);
+	return 0;
+}
+EXPORT_SYMBOL(set_pages_array_wc);
+
+int set_pages_array_wb(struct page **pages, int addrinarray)
+{
+	return 0;
+}
+EXPORT_SYMBOL(set_pages_array_wb);
+
+int set_pages_array_iwb(struct page **pages, int addrinarray)
+{
+	flush_cache(pages, addrinarray);
+	return 0;
+}
+EXPORT_SYMBOL(set_pages_array_iwb);
+
+#endif

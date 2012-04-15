@@ -135,7 +135,7 @@ static inline void bfq_calc_finish(struct bfq_entity *entity,
 
 	if (bfqq != NULL) {
 		bfq_log_bfqq(bfqq->bfqd, bfqq,
-			"calc_finish: serv %lu, w %lu",
+			"calc_finish: serv %lu, w %d",
 			service, entity->weight);
 		bfq_log_bfqq(bfqq->bfqd, bfqq,
 			"calc_finish: start %llu, finish %llu, delta %llu",
@@ -369,7 +369,7 @@ static inline void bfq_get_entity(struct bfq_entity *entity)
 		sd = entity->sched_data;
 		atomic_inc(&bfqq->ref);
 		bfq_log_bfqq(bfqq->bfqd, bfqq, "get_entity: %p %d",
-			     bfqq, bfqq->ref);
+			     bfqq, atomic_read(&bfqq->ref));
 	}
 }
 
@@ -469,7 +469,7 @@ static void bfq_forget_entity(struct bfq_service_tree *st,
 	if (bfqq != NULL) {
 		sd = entity->sched_data;
 		bfq_log_bfqq(bfqq->bfqd, bfqq, "forget_entity: %p %d",
-			     bfqq, bfqq->ref);
+			     bfqq, atomic_read(&bfqq->ref));
 		bfq_put_queue(bfqq);
 	}
 }

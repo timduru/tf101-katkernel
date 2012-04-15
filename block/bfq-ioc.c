@@ -169,7 +169,7 @@ static struct cfq_io_context *bfq_alloc_io_context(struct bfq_data *bfqd,
 	cic = kmem_cache_alloc_node(bfq_ioc_pool, gfp_mask | __GFP_ZERO,
 							bfqd->queue->node);
 	if (cic != NULL) {
-		cic->last_end_request = jiffies;
+		cic->ttime.last_end_request = jiffies;
 		INIT_LIST_HEAD(&cic->queue_list);
 		INIT_HLIST_NODE(&cic->cic_list);
 		cic->dtor = bfq_free_io_context;
