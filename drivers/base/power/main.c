@@ -459,6 +459,7 @@ static int device_resume_noirq(struct device *dev, pm_message_t state)
  */
 void dpm_resume_noirq(pm_message_t state)
 {
+	printk("dpm_resume_noirq+\n");
 	ktime_t starttime = ktime_get();
 
 	mutex_lock(&dpm_list_mtx);
@@ -480,6 +481,7 @@ void dpm_resume_noirq(pm_message_t state)
 	mutex_unlock(&dpm_list_mtx);
 	dpm_show_time(starttime, state, "early");
 	resume_device_irqs();
+	printk("dpm_resume_noirq-\n");
 }
 EXPORT_SYMBOL_GPL(dpm_resume_noirq);
 
@@ -585,11 +587,12 @@ static void async_resume(void *data, async_cookie_t cookie)
 {
 	struct device *dev = (struct device *)data;
 	int error;
-
+	printk("async_resume+\n");
 	error = device_resume(dev, pm_transition, true);
 	if (error)
 		pm_dev_err(dev, pm_transition, " async", error);
 	put_device(dev);
+	printk("async_resume-\n");
 }
 
 static bool is_async(struct device *dev)
@@ -633,6 +636,8 @@ void dpm_resume(pm_message_t state)
 {
 	struct device *dev;
 	ktime_t starttime = ktime_get();
+	
+	printk("dpm_resume+\n");
 
 	might_sleep();
 
@@ -669,6 +674,7 @@ void dpm_resume(pm_message_t state)
 	mutex_unlock(&dpm_list_mtx);
 	async_synchronize_full();
 	dpm_show_time(starttime, state, NULL);
+	printk("dpm_resume-\n");
 }
 
 /**
@@ -820,6 +826,8 @@ int dpm_suspend_noirq(pm_message_t state)
 	ktime_t starttime = ktime_get();
 	int error = 0;
 
+	printk("dpm_suspend_noirq+\n");
+	
 	suspend_device_irqs();
 	mutex_lock(&dpm_list_mtx);
 	while (!list_empty(&dpm_suspended_list)) {
@@ -845,6 +853,7 @@ int dpm_suspend_noirq(pm_message_t state)
 		dpm_resume_noirq(resume_event(state));
 	else
 		dpm_show_time(starttime, state, "late");
+	printk("dpm_suspend_noirq-\n");
 	return error;
 }
 EXPORT_SYMBOL_GPL(dpm_suspend_noirq);
@@ -966,12 +975,15 @@ static void async_suspend(void *data, async_cookie_t cookie)
 {
 	struct device *dev = (struct device *)data;
 	int error;
-
+	
+	printk("async_suspend+\n");
+	
 	error = __device_suspend(dev, pm_transition, true);
 	if (error)
 		pm_dev_err(dev, pm_transition, " async", error);
 
 	put_device(dev);
+	printk("async_suspend-\n");
 }
 
 static int device_suspend(struct device *dev)
@@ -996,6 +1008,8 @@ int dpm_suspend(pm_message_t state)
 	ktime_t starttime = ktime_get();
 	int error = 0;
 
+	printk("dpm_suspend+\n");
+	
 	might_sleep();
 
 	mutex_lock(&dpm_list_mtx);
@@ -1027,6 +1041,7 @@ int dpm_suspend(pm_message_t state)
 		error = async_error;
 	if (!error)
 		dpm_show_time(starttime, state, NULL);
+	printk("dpm_suspend-\n");
 	return error;
 }
 
