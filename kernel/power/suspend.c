@@ -25,6 +25,9 @@
 #include <linux/syscore_ops.h>
 #include <trace/events/power.h>
 
+#include <linux/gpio.h>
+#include <../gpio-names.h>
+
 #include "power.h"
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
@@ -95,25 +98,41 @@ static int suspend_prepare(void)
 
 	if (!suspend_ops || !suspend_ops->enter)
 		return -EPERM;
-
+//	printk("suspend_prepare\n");
+//	printk("pm_prepare_console\n");
+//	sys_sync();
 	pm_prepare_console();
 
+//	printk("pm_notifier_call_chain\n");
+//	sys_sync();
 	error = pm_notifier_call_chain(PM_SUSPEND_PREPARE);
 	if (error)
 		goto Finish;
 
+//	printk("usermodehelper_disable\n");
+//	sys_sync();
 	error = usermodehelper_disable();
 	if (error)
 		goto Finish;
 
+//	printk("suspend_freeze_processes\n");
+//	sys_sync();
 	error = suspend_freeze_processes();
 	if (!error)
 		return 0;
 
+//	printk("suspend_thaw_processes\n");
+//	sys_sync();
 	suspend_thaw_processes();
+//	printk("usermodehelper_enable\n");
+//	sys_sync();
 	usermodehelper_enable();
  Finish:
+//	printk("pm_notifier_call_chain\n");
+//	sys_sync();
 	pm_notifier_call_chain(PM_POST_SUSPEND);
+//	printk("pm_restore_console\n");
+//	sys_sync();
 	pm_restore_console();
 	return error;
 }
@@ -285,7 +304,10 @@ int enter_state(suspend_state_t state)
 		return -EBUSY;
 
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
-	msleep(6000);	
+	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
+//		sys_sync();
+		msleep(6000);	
+	}
 	sys_sync();
 	printk("done.\n");
 
@@ -298,12 +320,20 @@ int enter_state(suspend_state_t state)
 		goto Finish;
 
 	pr_debug("PM: Entering %s sleep\n", pm_states[state]);
+//	printk("pm_restrict_gfp_mask\n");
+//	sys_sync();
 	pm_restrict_gfp_mask();
+//	printk("suspend_devices_and_enter\n");
+//	sys_sync();
 	error = suspend_devices_and_enter(state);
+//	printk("pm_restore_gfp_mask\n");
+//	sys_sync();
 	pm_restore_gfp_mask();
 
  Finish:
 	pr_debug("PM: Finishing wakeup.\n");
+//	printk("suspend_finish\n");
+//	sys_sync();
 	suspend_finish();
  Unlock:
 	mutex_unlock(&pm_mutex);

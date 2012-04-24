@@ -47,13 +47,25 @@ static int try_to_freeze_tasks(bool sig_only)
 
 	end_time = jiffies + TIMEOUT;
 
+//	printk("Freezing1\n ");
+//	sys_sync();
+
 	if (!sig_only)
 		freeze_workqueues_begin();
 
+//	printk("Freezing2\n ");
+//	sys_sync();
+	
 	while (true) {
+//		printk("Freezing--\n ");
+//		sys_sync();
 		todo = 0;
 		read_lock(&tasklist_lock);
+//		printk("Freezing---\n ");
+//		sys_sync();
 		do_each_thread(g, p) {
+//			printk("Freezing----\n ");
+//			sys_sync();
 			if (frozen(p) || !freezable(p))
 				continue;
 
@@ -101,6 +113,9 @@ static int try_to_freeze_tasks(bool sig_only)
 		 */
 		msleep(10);
 	}
+
+//	printk("Freezing3\n ");
+//	sys_sync();
 
 	do_gettimeofday(&end);
 	elapsed_csecs64 = timeval_to_ns(&end) - timeval_to_ns(&start);
@@ -153,6 +168,7 @@ int freeze_processes(void)
 	int error;
 
 	printk("Freezing user space processes ... ");
+//	sys_sync();
 	error = try_to_freeze_tasks(true);
 	if (error)
 		goto Exit;
