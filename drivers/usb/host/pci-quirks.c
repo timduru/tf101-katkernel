@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/acpi.h>
+#include <linux/dmi.h>
 #include "pci-quirks.h"
 #include "xhci-ext-caps.h"
 
@@ -34,6 +35,9 @@
 #define OHCI_INTRSTATUS		0x0c
 #define OHCI_INTRENABLE		0x10
 #define OHCI_INTRDISABLE	0x14
+#define OHCI_FMINTERVAL		0x34
+#define OHCI_HCFS		(3 << 6)	/* hc functional state */
+#define OHCI_HCR		(1 << 0)	/* host controller reset */
 #define OHCI_OCR		(1 << 3)	/* ownership change request */
 #define OHCI_CTRL_RWC		(1 << 9)	/* remote wakeup connected */
 #define OHCI_CTRL_IR		(1 << 8)	/* interrupt routing */
@@ -67,6 +71,9 @@
 #define	BIF_NB			0x10002
 #define	NB_PIF0_PWRDOWN_0	0x01100012
 #define	NB_PIF0_PWRDOWN_1	0x01100013
+
+#define USB_INTEL_XUSB2PR      0xD0
+#define USB_INTEL_USB3_PSSEN   0xD8
 
 static struct amd_chipset_info {
 	struct pci_dev	*nb_dev;
@@ -459,6 +466,8 @@ static void __devinit quirk_usb_handoff_ohci(struct pci_dev *pdev)
 {
 	void __iomem *base;
 	u32 control;
+	u32 fminterval;
+	int cnt;
 
 	if (!mmio_resource_enabled(pdev, 0))
 		return;
@@ -491,26 +500,127 @@ static void __devinit quirk_usb_handoff_ohci(struct pci_dev *pdev)
 	}
 #endif
 
-	/* reset controller, preserving RWC (and possibly IR) */
-	writel(control & OHCI_CTRL_MASK, base + OHCI_CONTROL);
+	/* disable interrupts */
+	writel((u32) ~0, base + OHCI_INTRDISABLE);
 
-	/*
-	 * disable interrupts
-	 */
-	writel(~(u32)0, base + OHCI_INTRDISABLE);
-	writel(~(u32)0, base + OHCI_INTRSTATUS);
+	/* Reset the USB bus, if the controller isn't already in RESET */
+	if (control & OHCI_HCFS) {
+		/* Go into RESET, preserving RWC (and possibly IR) */
+		writel(control & OHCI_CTRL_MASK, base + OHCI_CONTROL);
+		readl(base + OHCI_CONTROL);
 
+		/* drive bus reset for at least 50 ms (7.1.7.5) */
+		msleep(50);
+	}
+
+	/* software reset of the controller, preserving HcFmInterval */
+	fminterval = readl(base + OHCI_FMINTERVAL);
+	writel(OHCI_HCR, base + OHCI_CMDSTATUS);
+
+	/* reset requires max 10 us delay */
+	for (cnt = 30; cnt > 0; --cnt) {	/* ... allow extra time */
+		if ((readl(base + OHCI_CMDSTATUS) & OHCI_HCR) == 0)
+			break;
+		udelay(1);
+	}
+	writel(fminterval, base + OHCI_FMINTERVAL);
+
+	/* Now the controller is safely in SUSPEND and nothing can wake it up */
 	iounmap(base);
+}
+
+static const struct dmi_system_id __devinitconst ehci_dmi_nohandoff_table[] = {
+	{
+		/*  Pegatron Lucid (ExoPC) */
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "EXOPG06411"),
+			DMI_MATCH(DMI_BIOS_VERSION, "Lucid-CE-133"),
+		},
+	},
+	{
+		/*  Pegatron Lucid (Ordissimo AIRIS) */
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "M11JB"),
+			DMI_MATCH(DMI_BIOS_VERSION, "Lucid-GE-133"),
+		},
+	},
+	{ }
+};
+
+static void __devinit ehci_bios_handoff(struct pci_dev *pdev,
+					void __iomem *op_reg_base,
+					u32 cap, u8 offset)
+{
+	int try_handoff = 1, tried_handoff = 0;
+
+	/* The Pegatron Lucid tablet sporadically waits for 98 seconds trying
+	 * the handoff on its unused controller.  Skip it. */
+	if (pdev->vendor == 0x8086 && pdev->device == 0x283a) {
+		if (dmi_check_system(ehci_dmi_nohandoff_table))
+			try_handoff = 0;
+	}
+
+	if (try_handoff && (cap & EHCI_USBLEGSUP_BIOS)) {
+		dev_dbg(&pdev->dev, "EHCI: BIOS handoff\n");
+
+#if 0
+/* aleksey_gorelov@phoenix.com reports that some systems need SMI forced on,
+ * but that seems dubious in general (the BIOS left it off intentionally)
+ * and is known to prevent some systems from booting.  so we won't do this
+ * unless maybe we can determine when we're on a system that needs SMI forced.
+ */
+		/* BIOS workaround (?): be sure the pre-Linux code
+		 * receives the SMI
+		 */
+		pci_read_config_dword(pdev, offset + EHCI_USBLEGCTLSTS, &val);
+		pci_write_config_dword(pdev, offset + EHCI_USBLEGCTLSTS,
+				       val | EHCI_USBLEGCTLSTS_SOOE);
+#endif
+
+		/* some systems get upset if this semaphore is
+		 * set for any other reason than forcing a BIOS
+		 * handoff..
+		 */
+		pci_write_config_byte(pdev, offset + 3, 1);
+	}
+
+	/* if boot firmware now owns EHCI, spin till it hands it over. */
+	if (try_handoff) {
+		int msec = 1000;
+		while ((cap & EHCI_USBLEGSUP_BIOS) && (msec > 0)) {
+			tried_handoff = 1;
+			msleep(10);
+			msec -= 10;
+			pci_read_config_dword(pdev, offset, &cap);
+		}
+	}
+
+	if (cap & EHCI_USBLEGSUP_BIOS) {
+		/* well, possibly buggy BIOS... try to shut it down,
+		 * and hope nothing goes too wrong
+		 */
+		if (try_handoff)
+			dev_warn(&pdev->dev, "EHCI: BIOS handoff failed"
+				 " (BIOS bug?) %08x\n", cap);
+		pci_write_config_byte(pdev, offset + 2, 0);
+	}
+
+	/* just in case, always disable EHCI SMIs */
+	pci_write_config_dword(pdev, offset + EHCI_USBLEGCTLSTS, 0);
+
+	/* If the BIOS ever owned the controller then we can't expect
+	 * any power sessions to remain intact.
+	 */
+	if (tried_handoff)
+		writel(0, op_reg_base + EHCI_CONFIGFLAG);
 }
 
 static void __devinit quirk_usb_disable_ehci(struct pci_dev *pdev)
 {
-	int wait_time, delta;
 	void __iomem *base, *op_reg_base;
-	u32	hcc_params, val;
+	u32	hcc_params, cap, val;
 	u8	offset, cap_length;
-	int	count = 256/4;
-	int	tried_handoff = 0;
+	int	wait_time, count = 256/4;
 
 	if (!mmio_resource_enabled(pdev, 0))
 		return;
@@ -529,77 +639,17 @@ static void __devinit quirk_usb_disable_ehci(struct pci_dev *pdev)
 	hcc_params = readl(base + EHCI_HCC_PARAMS);
 	offset = (hcc_params >> 8) & 0xff;
 	while (offset && --count) {
-		u32		cap;
-		int		msec;
-
 		pci_read_config_dword(pdev, offset, &cap);
+
 		switch (cap & 0xff) {
-		case 1:			/* BIOS/SMM/... handoff support */
-			if ((cap & EHCI_USBLEGSUP_BIOS)) {
-				dev_dbg(&pdev->dev, "EHCI: BIOS handoff\n");
-
-#if 0
-/* aleksey_gorelov@phoenix.com reports that some systems need SMI forced on,
- * but that seems dubious in general (the BIOS left it off intentionally)
- * and is known to prevent some systems from booting.  so we won't do this
- * unless maybe we can determine when we're on a system that needs SMI forced.
- */
-				/* BIOS workaround (?): be sure the
-				 * pre-Linux code receives the SMI
-				 */
-				pci_read_config_dword(pdev,
-						offset + EHCI_USBLEGCTLSTS,
-						&val);
-				pci_write_config_dword(pdev,
-						offset + EHCI_USBLEGCTLSTS,
-						val | EHCI_USBLEGCTLSTS_SOOE);
-#endif
-
-				/* some systems get upset if this semaphore is
-				 * set for any other reason than forcing a BIOS
-				 * handoff..
-				 */
-				pci_write_config_byte(pdev, offset + 3, 1);
-			}
-
-			/* if boot firmware now owns EHCI, spin till
-			 * it hands it over.
-			 */
-			msec = 1000;
-			while ((cap & EHCI_USBLEGSUP_BIOS) && (msec > 0)) {
-				tried_handoff = 1;
-				msleep(10);
-				msec -= 10;
-				pci_read_config_dword(pdev, offset, &cap);
-			}
-
-			if (cap & EHCI_USBLEGSUP_BIOS) {
-				/* well, possibly buggy BIOS... try to shut
-				 * it down, and hope nothing goes too wrong
-				 */
-				dev_warn(&pdev->dev, "EHCI: BIOS handoff failed"
-						" (BIOS bug?) %08x\n", cap);
-				pci_write_config_byte(pdev, offset + 2, 0);
-			}
-
-			/* just in case, always disable EHCI SMIs */
-			pci_write_config_dword(pdev,
-					offset + EHCI_USBLEGCTLSTS,
-					0);
-
-			/* If the BIOS ever owned the controller then we
-			 * can't expect any power sessions to remain intact.
-			 */
-			if (tried_handoff)
-				writel(0, op_reg_base + EHCI_CONFIGFLAG);
+		case 1:
+			ehci_bios_handoff(pdev, op_reg_base, cap, offset);
 			break;
-		case 0:			/* illegal reserved capability */
-			cap = 0;
-			/* FALLTHROUGH */
+		case 0: /* Illegal reserved cap, set cap=0 so we exit */
+			cap = 0; /* then fallthrough... */
 		default:
 			dev_warn(&pdev->dev, "EHCI: unrecognized capability "
-					"%02x\n", cap & 0xff);
-			break;
+				 "%02x\n", cap & 0xff);
 		}
 		offset = (cap >> 8) & 0xff;
 	}
@@ -616,11 +666,10 @@ static void __devinit quirk_usb_disable_ehci(struct pci_dev *pdev)
 		writel(val, op_reg_base + EHCI_USBCMD);
 
 		wait_time = 2000;
-		delta = 100;
 		do {
 			writel(0x3f, op_reg_base + EHCI_USBSTS);
-			udelay(delta);
-			wait_time -= delta;
+			udelay(100);
+			wait_time -= 100;
 			val = readl(op_reg_base + EHCI_USBSTS);
 			if ((val == ~(u32)0) || (val & EHCI_USBSTS_HALTED)) {
 				break;
@@ -661,6 +710,64 @@ static int handshake(void __iomem *ptr, u32 mask, u32 done,
 	} while (wait_usec > 0);
 	return -ETIMEDOUT;
 }
+
+bool usb_is_intel_switchable_xhci(struct pci_dev *pdev)
+{
+	return pdev->class == PCI_CLASS_SERIAL_USB_XHCI &&
+		pdev->vendor == PCI_VENDOR_ID_INTEL &&
+		pdev->device == PCI_DEVICE_ID_INTEL_PANTHERPOINT_XHCI;
+}
+EXPORT_SYMBOL_GPL(usb_is_intel_switchable_xhci);
+
+/*
+ * Intel's Panther Point chipset has two host controllers (EHCI and xHCI) that
+ * share some number of ports.  These ports can be switched between either
+ * controller.  Not all of the ports under the EHCI host controller may be
+ * switchable.
+ *
+ * The ports should be switched over to xHCI before PCI probes for any device
+ * start.  This avoids active devices under EHCI being disconnected during the
+ * port switchover, which could cause loss of data on USB storage devices, or
+ * failed boot when the root file system is on a USB mass storage device and is
+ * enumerated under EHCI first.
+ *
+ * We write into the xHC's PCI configuration space in some Intel-specific
+ * registers to switch the ports over.  The USB 3.0 terminations and the USB
+ * 2.0 data wires are switched separately.  We want to enable the SuperSpeed
+ * terminations before switching the USB 2.0 wires over, so that USB 3.0
+ * devices connect at SuperSpeed, rather than at USB 2.0 speeds.
+ */
+void usb_enable_xhci_ports(struct pci_dev *xhci_pdev)
+{
+	u32		ports_available;
+
+	ports_available = 0xffffffff;
+	/* Write USB3_PSSEN, the USB 3.0 Port SuperSpeed Enable
+	 * Register, to turn on SuperSpeed terminations for all
+	 * available ports.
+	 */
+	pci_write_config_dword(xhci_pdev, USB_INTEL_USB3_PSSEN,
+			cpu_to_le32(ports_available));
+
+	pci_read_config_dword(xhci_pdev, USB_INTEL_USB3_PSSEN,
+			&ports_available);
+	dev_dbg(&xhci_pdev->dev, "USB 3.0 ports that are now enabled "
+			"under xHCI: 0x%x\n", ports_available);
+
+	ports_available = 0xffffffff;
+	/* Write XUSB2PR, the xHC USB 2.0 Port Routing Register, to
+	 * switch the USB 2.0 power and data lines over to the xHCI
+	 * host.
+	 */
+	pci_write_config_dword(xhci_pdev, USB_INTEL_XUSB2PR,
+			cpu_to_le32(ports_available));
+
+	pci_read_config_dword(xhci_pdev, USB_INTEL_XUSB2PR,
+			&ports_available);
+	dev_dbg(&xhci_pdev->dev, "USB 2.0 ports that are now switched over "
+			"to xHCI: 0x%x\n", ports_available);
+}
+EXPORT_SYMBOL_GPL(usb_enable_xhci_ports);
 
 /**
  * PCI Quirks for xHCI.
@@ -703,7 +810,7 @@ static void __devinit quirk_usb_handoff_xhci(struct pci_dev *pdev)
 
 	/* If the BIOS owns the HC, signal that the OS wants it, and wait */
 	if (val & XHCI_HC_BIOS_OWNED) {
-		writel(val & XHCI_HC_OS_OWNED, base + ext_cap_offset);
+		writel(val | XHCI_HC_OS_OWNED, base + ext_cap_offset);
 
 		/* Wait for 5 seconds with 10 microsecond polling interval */
 		timeout = handshake(base + ext_cap_offset, XHCI_HC_BIOS_OWNED,
@@ -721,6 +828,8 @@ static void __devinit quirk_usb_handoff_xhci(struct pci_dev *pdev)
 	writel(XHCI_LEGACY_DISABLE_SMI,
 			base + ext_cap_offset + XHCI_LEGACY_CONTROL_OFFSET);
 
+	if (usb_is_intel_switchable_xhci(pdev))
+		usb_enable_xhci_ports(pdev);
 hc_init:
 	op_reg_base = base + XHCI_HC_LENGTH(readl(base));
 

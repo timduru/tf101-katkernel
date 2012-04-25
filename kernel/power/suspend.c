@@ -307,6 +307,7 @@ int enter_state(suspend_state_t state)
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
 //		sys_sync();
 		msleep(6000);	
+//		cpu_down(1);
 	}
 	sys_sync();
 	printk("done.\n");
@@ -334,6 +335,7 @@ int enter_state(suspend_state_t state)
 	pr_debug("PM: Finishing wakeup.\n");
 //	printk("suspend_finish\n");
 //	sys_sync();
+//	cpu_up(1);
 	suspend_finish();
  Unlock:
 	mutex_unlock(&pm_mutex);
