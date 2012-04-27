@@ -548,7 +548,7 @@ static int t20_channel_read_3d_reg(
 	read_waiter = NULL;
 	WARN(err, "Failed to set wakeup interrupt");
 	wait_event(wq,
-		nvhost_syncpt_min_cmp(&channel->dev->syncpt,
+		nvhost_syncpt_is_expired(&channel->dev->syncpt,
 				NVSYNCPT_3D, syncval - 2));
 	nvhost_intr_put_ref(&channel->dev->intr, ref);
 

@@ -30,6 +30,9 @@
 
 #include "power.h"
 
+extern int asusec_suspend_hub_callback(void);
+
+
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
 	[PM_SUSPEND_ON]		= "on",
@@ -296,17 +299,17 @@ static void suspend_finish(void)
 int enter_state(suspend_state_t state)
 {
 	int error;
-
+	
 	if (!valid_state(state))
 		return -ENODEV;
 
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
-
+	
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
-//		sys_sync();
-		msleep(6000);	
+		asusec_suspend_hub_callback();
+//		msleep(6000);	
 //		cpu_down(1);
 	}
 	sys_sync();

@@ -19,6 +19,8 @@
 #include <linux/suspend.h>
 #include <linux/syscalls.h> /* sys_sync */
 #include <linux/wakelock.h>
+#include <mach/gpio.h>
+#include "../../arch/arm/mach-tegra/gpio-names.h"
 #ifdef CONFIG_WAKELOCK_STAT
 #include <linux/proc_fs.h>
 #endif
@@ -267,7 +269,7 @@ static void suspend_backoff(void)
 	wake_lock_timeout(&suspend_backoff_lock,
 			  msecs_to_jiffies(SUSPEND_BACKOFF_INTERVAL));
 }
-
+int suspend_process_going=0;
 static void suspend(struct work_struct *work)
 {
 	int ret;
@@ -285,7 +287,11 @@ static void suspend(struct work_struct *work)
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("suspend: enter suspend\n");
 	getnstimeofday(&ts_entry);
+	suspend_process_going=1;
+	disable_irq(gpio_to_irq(TEGRA_GPIO_PX5));	
 	ret = pm_suspend(requested_suspend_state);
+	enable_irq(gpio_to_irq(TEGRA_GPIO_PX5));
+	suspend_process_going=0;	
 	getnstimeofday(&ts_exit);
 
 	if (debug_mask & DEBUG_EXIT_SUSPEND) {

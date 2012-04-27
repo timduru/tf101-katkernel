@@ -408,7 +408,7 @@ int host1x_channel_read_3d_reg(
 	read_waiter = NULL;
 	WARN(err, "Failed to set wakeup interrupt");
 	wait_event(wq,
-		nvhost_syncpt_min_cmp(&channel->dev->syncpt,
+		nvhost_syncpt_is_expired(&channel->dev->syncpt,
 				NVSYNCPT_3D, syncval - 2));
 	nvhost_intr_put_ref(&channel->dev->intr, ref);
 
@@ -554,7 +554,7 @@ int host1x_save_context(struct nvhost_module *mod, u32 syncpt_id)
 	wakeup_waiter = NULL;
 	WARN(err, "Failed to set wakeup interrupt");
 	wait_event(wq,
-		nvhost_syncpt_min_cmp(&ch->dev->syncpt,
+		nvhost_syncpt_is_expired(&ch->dev->syncpt,
 				syncpt_id, syncpt_val));
 
 	nvhost_intr_put_ref(&ch->dev->intr, ref);

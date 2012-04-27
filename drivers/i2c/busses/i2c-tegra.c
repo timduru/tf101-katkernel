@@ -474,6 +474,8 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 	return err;
 }
 
+#define CAMERA_I2C_CONT_ID (2)
+extern int suspend_process_going;
 static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 {
 	u32 status;
@@ -545,7 +547,40 @@ static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 
 		goto err;
 	}
+	if( suspend_process_going && i2c_dev->cont_id==CAMERA_I2C_CONT_ID &&
+			i2c_dev->msg_read && (status == I2C_INT_TX_FIFO_DATA_REQ)	) {
+		printk(" tegra_i2c_isr irq=%u status =%x i2c_msg_read=%u  I2C_STATUS=%u i2c_dev->msg_buf_remaining=%u %u\n",irq,status,i2c_dev->msg_read,i2c_readl(i2c_dev, I2C_STATUS) ,i2c_dev->msg_buf_remaining,(i2c_readl(i2c_dev, I2C_STATUS) & I2C_STATUS_BUSY));
+		WARN(1, KERN_ERR  "unknown camera's I2C TX interrupt  %x\n",unlikely((i2c_readl(i2c_dev, I2C_STATUS) & I2C_STATUS_BUSY)
+				&& (status == I2C_INT_TX_FIFO_DATA_REQ)
+				&& i2c_dev->msg_read
+				&& i2c_dev->msg_buf_remaining));
+		i2c_dev->msg_err |= I2C_ERR_UNKNOWN_INTERRUPT;
 
+		if (!i2c_dev->irq_disabled) {
+			disable_irq_nosync(i2c_dev->irq);
+			i2c_dev->irq_disabled = 1;
+		}
+			complete(&i2c_dev->msg_complete);
+		goto err;
+	}
+
+	if( suspend_process_going && i2c_dev->cont_id==CAMERA_I2C_CONT_ID &&
+			(!i2c_dev->msg_read) && (status == I2C_INT_RX_FIFO_DATA_REQ) ) {
+		printk(" tegra_i2c_isr irq=%u status =%x i2c_msg_read=%u  I2C_STATUS=%u i2c_dev->msg_buf_remaining=%u %u\n",irq,status,i2c_dev->msg_read,i2c_readl(i2c_dev, I2C_STATUS) ,i2c_dev->msg_buf_remaining,(i2c_readl(i2c_dev, I2C_STATUS) & I2C_STATUS_BUSY));
+		WARN(1, KERN_ERR  "unknown camera's I2C RX interrupt %x\n",unlikely((i2c_readl(i2c_dev, I2C_STATUS) & I2C_STATUS_BUSY)
+				&& (status == I2C_INT_TX_FIFO_DATA_REQ)
+				&& i2c_dev->msg_read
+				&& i2c_dev->msg_buf_remaining));
+		i2c_dev->msg_err |= I2C_ERR_UNKNOWN_INTERRUPT;
+
+		if (!i2c_dev->irq_disabled) {
+			disable_irq_nosync(i2c_dev->irq);
+			i2c_dev->irq_disabled = 1;
+		}
+
+		complete(&i2c_dev->msg_complete);
+		goto err;
+	}
 	if (i2c_dev->msg_read && (status & I2C_INT_RX_FIFO_DATA_REQ)) {
 		if (i2c_dev->msg_buf_remaining)
 			tegra_i2c_empty_rx_fifo(i2c_dev);
