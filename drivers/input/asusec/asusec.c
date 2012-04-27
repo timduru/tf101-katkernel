@@ -69,7 +69,7 @@ static int asusec_touchpad_enable(struct i2c_client *client);
 static int asusec_touchpad_disable(struct i2c_client *client);
 //static int asusec_touchpad_reset(struct i2c_client *client);
 static int asusec_suspend(struct i2c_client *client, pm_message_t mesg);
-static int asusec_resume(struct i2c_client *client);
+int asusec_resume(struct i2c_client *client);
 static int asusec_open(struct inode *inode, struct file *flip);
 static int asusec_release(struct inode *inode, struct file *flip);
 static long asusec_ioctl(struct file *flip, unsigned int cmd, unsigned long arg);
@@ -1828,7 +1828,7 @@ static int asusec_suspend(struct i2c_client *client, pm_message_t mesg){
 	return 0;
 }
 
-static int asusec_resume(struct i2c_client *client){
+int asusec_resume(struct i2c_client *client){
 
 	printk("asusec_resume+\n");
 
@@ -1845,6 +1845,7 @@ static int asusec_resume(struct i2c_client *client){
 	printk("asusec_resume-\n");
 	return 0;	
 }
+EXPORT_SYMBOL(asusec_resume);
 
 static int asusec_set_wakeup_cmd(void){
 	int ret_val = 0;

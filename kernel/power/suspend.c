@@ -31,6 +31,7 @@
 #include "power.h"
 
 extern int asusec_suspend_hub_callback(void);
+extern int asusec_resume(int);
 
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
@@ -307,18 +308,20 @@ int enter_state(suspend_state_t state)
 		return -EBUSY;
 	
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
+	sys_sync();
+	printk("done.\n");
+
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
 		asusec_suspend_hub_callback();
 //		msleep(6000);	
 //		cpu_down(1);
 	}
-	sys_sync();
-	printk("done.\n");
-
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
-	if (error)
+	if (error) {
+//		asusec_resume(0);
 		goto Unlock;
+	}
 
 	if (suspend_test(TEST_FREEZER))
 		goto Finish;
@@ -341,6 +344,7 @@ int enter_state(suspend_state_t state)
 //	cpu_up(1);
 	suspend_finish();
  Unlock:
+	asusec_resume(0);
 	mutex_unlock(&pm_mutex);
 	return error;
 }
