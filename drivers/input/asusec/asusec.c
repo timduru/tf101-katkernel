@@ -671,6 +671,7 @@ static irqreturn_t asusec_interrupt_handler(int irq, void *dev_id){
 		}
 		else{
 			if (ec_chip->suspend_state){
+				printk("Why?\n");
 				ec_chip->wakeup_lcd = 1;
 				ec_chip->ap_wake_wakeup = 1;
 			}
@@ -1357,7 +1358,11 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 					msleep(400);
 					asusec_reset_dock();
 					msleep(200);
+					asusec_reset_dock();
+					msleep(200);
 					asusec_chip_init(ec_chip->client);
+				} else {
+					printk("Fail?\n");
 				}
 			} else {
 				ASUSEC_NOTICE("Keyboard is closed\n");
