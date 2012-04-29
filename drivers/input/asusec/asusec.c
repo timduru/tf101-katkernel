@@ -1409,8 +1409,11 @@ static void asusec_work_function(struct work_struct *dat)
 	int irq = gpio_to_irq(gpio);
 	int ret_val = 0;
 
+//	printk("asusec_work_function+\n");
 	if (ec_chip->wakeup_lcd){
+		printk("wakeup_lcd\n");
 		if (gpio_get_value(TEGRA_GPIO_PS4)){
+			printk("test\n");
 			ec_chip->wakeup_lcd = 0;
 			if (ASUSGetProjectID()==101){
 				ec_chip->dock_in = gpio_get_value(TEGRA_GPIO_PX5) ? 0 : 1;
@@ -1453,6 +1456,7 @@ static void asusec_work_function(struct work_struct *dat)
 #if (!ASUSEC_INTERRUPT_DRIVEN)
 	queue_delayed_work(asusec_wq, &ec_chip->asusec_work, HZ/ASUSEC_POLLING_RATE);
 #endif
+//	printk("asusec_work_function-\n");
 }
 
 static void asusec_keypad_set_input_params(struct input_dev *dev)
@@ -1855,19 +1859,24 @@ EXPORT_SYMBOL(asusec_resume);
 static int asusec_set_wakeup_cmd(void){
 	int ret_val = 0;
 
+	printk("asusec_set_wakeup_cmd+\n");
 	if (ec_chip->dock_in){
 		ret_val = asusec_i2c_test(ec_chip->client);
 		if(ret_val >= 0){
+			printk("dock in and tested\n");
 			asusec_dockram_read_data(0x0A);
 			ec_chip->i2c_dm_data[0] = 8;
 			if (ec_chip->ec_wakeup){
+				printk("v1\n");
 				ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] | 0x80;
 			} else {
+				printk("v2\n");
 				ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0x7F;
 			}
 			asusec_dockram_write_data(0x0A,9);
 		}
 	}
+	printk("asusec_set_wakeup_cmd-\n");
 	return 0;
 }
 static ssize_t asusec_switch_name(struct switch_dev *sdev, char *buf)
