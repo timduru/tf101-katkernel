@@ -31,7 +31,6 @@
 #include <linux/smp.h>
 #include <linux/security.h>
 #include <linux/bootmem.h>
-#include <linux/memblock.h>
 #include <linux/syscalls.h>
 #include <linux/kexec.h>
 #include <linux/kdb.h>
@@ -43,7 +42,7 @@
 #include <linux/rculist.h>
 
 #include <asm/uaccess.h>
-
+#include <asm/io.h>
 /*
  * Architectures can override it:
  */
@@ -153,6 +152,12 @@ static char *log_buf = __log_buf;
 static int log_buf_len = __LOG_BUF_LEN;
 static unsigned logged_chars; /* Number of chars produced since last read+clear operation */
 static int saved_console_loglevel = -1;
+char *auto_dump_log_buf_ptr = __log_buf;
+
+#define IRAM_KERNEL_LOG_BUFFER	0x40020000
+extern int suspend_process_going;
+static void __iomem *iram_log_addr=NULL;
+#define IRAM_LOG_BUF(idx) ( ((unsigned char*)iram_log_addr)[(idx) & LOG_BUF_MASK] )
 
 #ifdef CONFIG_KEXEC
 /*
@@ -172,74 +177,46 @@ void log_buf_kexec_setup(void)
 }
 #endif
 
-/* requested log_buf_len from kernel cmdline */
-static unsigned long __initdata new_log_buf_len;
-
-/* save requested log_buf_len since it's too early to process it */
 static int __init log_buf_len_setup(char *str)
 {
 	unsigned size = memparse(str, &str);
+	unsigned long flags;
 
 	if (size)
 		size = roundup_pow_of_two(size);
-	if (size > log_buf_len)
-		new_log_buf_len = size;
+	if (size > log_buf_len) {
+		unsigned start, dest_idx, offset;
+		char *new_log_buf;
 
-	return 0;
+		new_log_buf = alloc_bootmem(size);
+		if (!new_log_buf) {
+			printk(KERN_WARNING "log_buf_len: allocation failed\n");
+			goto out;
+		}
+
+		spin_lock_irqsave(&logbuf_lock, flags);
+		log_buf_len = size;
+		log_buf = new_log_buf;
+
+		offset = start = min(con_start, log_start);
+		dest_idx = 0;
+		while (start != log_end) {
+			log_buf[dest_idx] = __log_buf[start & (__LOG_BUF_LEN - 1)];
+			start++;
+			dest_idx++;
+		}
+		log_start -= offset;
+		con_start -= offset;
+		log_end -= offset;
+		spin_unlock_irqrestore(&logbuf_lock, flags);
+
+		printk(KERN_NOTICE "log_buf_len: %d\n", log_buf_len);
+	}
+out:
+	return 1;
 }
-early_param("log_buf_len", log_buf_len_setup);
 
-void __init setup_log_buf(int early)
-{
-	unsigned long flags;
-	unsigned start, dest_idx, offset;
-	char *new_log_buf;
-	int free;
-
-	if (!new_log_buf_len)
-		return;
-
-	if (early) {
-		unsigned long mem;
-
-		mem = memblock_alloc(new_log_buf_len, PAGE_SIZE);
-		if (mem == MEMBLOCK_ERROR)
-			return;
-		new_log_buf = __va(mem);
-	} else {
-		new_log_buf = alloc_bootmem_nopanic(new_log_buf_len);
-	}
-
-	if (unlikely(!new_log_buf)) {
-		pr_err("log_buf_len: %ld bytes not available\n",
-			new_log_buf_len);
-		return;
-	}
-
-	spin_lock_irqsave(&logbuf_lock, flags);
-	log_buf_len = new_log_buf_len;
-	log_buf = new_log_buf;
-	new_log_buf_len = 0;
-	free = __LOG_BUF_LEN - log_end;
-
-	offset = start = min(con_start, log_start);
-	dest_idx = 0;
-	while (start != log_end) {
-		unsigned log_idx_mask = start & (__LOG_BUF_LEN - 1);
-
-		log_buf[dest_idx] = __log_buf[log_idx_mask];
-		start++;
-		dest_idx++;
-	}
-	log_start -= offset;
-	con_start -= offset;
-	log_end -= offset;
-	spin_unlock_irqrestore(&logbuf_lock, flags);
-
-	pr_info("log_buf_len: %d\n", log_buf_len);
-	pr_info("early log buf free: %d(%d%%)\n",
-		free, (free * 100) / __LOG_BUF_LEN);
-}
+__setup("log_buf_len=", log_buf_len_setup);
 
 #ifdef CONFIG_BOOT_PRINTK_DELAY
 
@@ -369,10 +346,8 @@ static int check_syslog_permissions(int type, bool from_file)
 			return 0;
 		/* For historical reasons, accept CAP_SYS_ADMIN too, with a warning */
 		if (capable(CAP_SYS_ADMIN)) {
-			printk_once(KERN_WARNING "%s (%d): "
-				 "Attempt to access syslog with CAP_SYS_ADMIN "
-				 "but no CAP_SYSLOG (deprecated).\n",
-				 current->comm, task_pid_nr(current));
+			WARN_ONCE(1, "Attempt to access syslog with CAP_SYS_ADMIN "
+				 "but no CAP_SYSLOG (deprecated).\n");
 			return 0;
 		}
 		return -EPERM;
@@ -715,6 +690,8 @@ static void call_console_drivers(unsigned start, unsigned end)
 static void emit_log_char(char c)
 {
 	LOG_BUF(log_end) = c;
+	if(suspend_process_going)
+	 IRAM_LOG_BUF(log_end) = c;
 	log_end++;
 	if (log_end - log_start > log_buf_len)
 		log_start = log_end - log_buf_len;
@@ -835,7 +812,7 @@ static inline int can_use_console(unsigned int cpu)
 static int console_trylock_for_printk(unsigned int cpu)
 	__releases(&logbuf_lock)
 {
-	int retval = 0, wake = 0;
+	int retval = 0;
 
 	if (console_trylock()) {
 		retval = 1;
@@ -848,14 +825,12 @@ static int console_trylock_for_printk(unsigned int cpu)
 		 */
 		if (!can_use_console(cpu)) {
 			console_locked = 0;
-			wake = 1;
+			up(&console_sem);
 			retval = 0;
 		}
 	}
 	printk_cpu = UINT_MAX;
 	spin_unlock(&logbuf_lock);
-	if (wake)
-		up(&console_sem);
 	return retval;
 }
 static const char recursion_bug_msg [] =
@@ -1071,7 +1046,7 @@ static int __init console_setup(char *str)
 	char buf[sizeof(console_cmdline[0].name) + 4]; /* 4 for index */
 	char *s, *options, *brl_options = NULL;
 	int idx;
-
+	iram_log_addr=ioremap(IRAM_KERNEL_LOG_BUFFER,8);
 #ifdef CONFIG_A11Y_BRAILLE_CONSOLE
 	if (!memcmp(str, "brl,", 4)) {
 		brl_options = "";
@@ -1154,7 +1129,7 @@ int update_console_cmdline(char *name, int idx, char *name_new, int idx_new, cha
 	return -1;
 }
 
-int console_suspend_enabled = 1;
+int console_suspend_enabled = 0;
 EXPORT_SYMBOL(console_suspend_enabled);
 
 static int __init console_suspend_disable(char *str)
@@ -1171,6 +1146,7 @@ __setup("no_console_suspend", console_suspend_disable);
  */
 void suspend_console(void)
 {
+	printk("Suspending console(s) (use no_console_suspend to debug)--\n");
 	if (!console_suspend_enabled)
 		return;
 	printk("Suspending console(s) (use no_console_suspend to debug)\n");
@@ -1300,7 +1276,7 @@ void console_unlock(void)
 {
 	unsigned long flags;
 	unsigned _con_start, _log_end;
-	unsigned wake_klogd = 0, retry = 0;
+	unsigned wake_klogd = 0;
 
 	if (console_suspended) {
 		up(&console_sem);
@@ -1309,7 +1285,6 @@ void console_unlock(void)
 
 	console_may_schedule = 0;
 
-again:
 	for ( ; ; ) {
 		spin_lock_irqsave(&logbuf_lock, flags);
 		wake_klogd |= log_start - log_end;
@@ -1330,23 +1305,8 @@ again:
 	if (unlikely(exclusive_console))
 		exclusive_console = NULL;
 
-	spin_unlock(&logbuf_lock);
-
 	up(&console_sem);
-
-	/*
-	 * Someone could have filled up the buffer again, so re-check if there's
-	 * something to flush. In case we cannot trylock the console_sem again,
-	 * there's a new owner and the console_unlock() from them will do the
-	 * flush, no worries.
-	 */
-	spin_lock(&logbuf_lock);
-	if (con_start != log_end)
-		retry = 1;
 	spin_unlock_irqrestore(&logbuf_lock, flags);
-	if (retry && console_trylock())
-		goto again;
-
 	if (wake_klogd)
 		wake_up_klogd();
 }
@@ -1658,7 +1618,7 @@ static int __init printk_late_init(void)
 	struct console *con;
 
 	for_each_console(con) {
-		if (!keep_bootcon && con->flags & CON_BOOT) {
+		if (con->flags & CON_BOOT) {
 			printk(KERN_INFO "turn off boot console %s%d\n",
 				con->name, con->index);
 			unregister_console(con);

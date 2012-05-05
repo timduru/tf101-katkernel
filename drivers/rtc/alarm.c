@@ -23,6 +23,7 @@
 #include <linux/spinlock.h>
 #include <linux/sysdev.h>
 #include <linux/wakelock.h>
+#include <linux/delay.h>
 
 #define ANDROID_ALARM_PRINT_ERROR (1U << 0)
 #define ANDROID_ALARM_PRINT_INIT_STATUS (1U << 1)
@@ -421,6 +422,9 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			rtc_alarm_time, rtc_current_time,
 			rtc_delta.tv_sec, rtc_delta.tv_nsec);
 		if (rtc_current_time + 1 >= rtc_alarm_time) {
+			printk("A test\n");
+			msleep(1000);
+/*			
 			pr_alarm(SUSPEND, "alarm about to go off\n");
 			memset(&rtc_alarm, 0, sizeof(rtc_alarm));
 			rtc_alarm.enabled = 0;
@@ -435,6 +439,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 				ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP], false);
 			err = -EBUSY;
 			spin_unlock_irqrestore(&alarm_slock, flags);
+*/			
 		}
 	}
 	return err;

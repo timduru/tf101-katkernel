@@ -845,7 +845,8 @@ static int mmc_suspend(struct mmc_host *host)
 static int mmc_resume(struct mmc_host *host)
 {
 	int err;
-
+	
+	printk("mmc_resume\n");
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 

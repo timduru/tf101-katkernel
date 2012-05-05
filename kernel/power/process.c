@@ -17,11 +17,15 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/wakelock.h>
-
+#include <mach/gpio.h>
+#include "../../arch/arm/mach-tegra/gpio-names.h"
 /* 
  * Timeout for stopping processes
  */
 #define TIMEOUT	(20 * HZ)
+
+extern int asusec_suspend_hub_callback(void);
+
 
 static inline int freezable(struct task_struct * p)
 {
@@ -95,17 +99,17 @@ static int try_to_freeze_tasks(bool sig_only)
 			todo += wq_busy;
 		}
 
-		if (todo && has_wake_lock(WAKE_LOCK_SUSPEND)) {
-			wakeup = 1;
-			break;
-		}
+//		if (todo && has_wake_lock(WAKE_LOCK_SUSPEND)) {
+//			wakeup = 1;
+//			break;
+//		}
 		if (!todo || time_after(jiffies, end_time))
 			break;
 
-		if (pm_wakeup_pending()) {
-			wakeup = true;
-			break;
-		}
+//		if (pm_wakeup_pending()) {
+//			wakeup = true;
+//			break;
+//		}
 
 		/*
 		 * We need to retry, but first give the freezing tasks some
@@ -167,7 +171,11 @@ int freeze_processes(void)
 {
 	int error;
 
-	printk("Freezing user space processes ... ");
+/*	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
+		asusec_suspend_hub_callback();
+		msleep(500);
+	}
+*/	printk("Freezing user space processes ... ");
 //	sys_sync();
 	error = try_to_freeze_tasks(true);
 	if (error)

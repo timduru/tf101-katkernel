@@ -273,7 +273,7 @@ static void tegra_fb_flip_win(struct tegra_fb_info *tegra_fb)
 	tegra_dc_sync_windows(&tegra_fb->win, 1);
 }
 #endif
-
+int display_on=0;
 static int tegra_fb_blank(int blank, struct fb_info *info)
 {
 	struct tegra_fb_info *tegra_fb = info->par;
@@ -283,6 +283,7 @@ static int tegra_fb_blank(int blank, struct fb_info *info)
 		dev_dbg(&tegra_fb->ndev->dev, "unblank\n");
 		tegra_fb->win->flags = TEGRA_WIN_FLAG_ENABLED;
 		tegra_dc_enable(tegra_fb->win->dc);
+		display_on=1;
 #if defined(CONFIG_FRAMEBUFFER_CONSOLE)
 		/*
 		* TODO:
@@ -305,6 +306,7 @@ static int tegra_fb_blank(int blank, struct fb_info *info)
 	case FB_BLANK_POWERDOWN:
 		dev_dbg(&tegra_fb->ndev->dev, "blank - powerdown\n");
 		tegra_dc_disable(tegra_fb->win->dc);
+		display_on=0;
 		return 0;
 
 	default:
@@ -591,10 +593,10 @@ struct tegra_fb_info *tegra_fb_register(struct nvhost_device *ndev,
 	if (dc->mode.pclk > 1000) {
 		struct tegra_dc_mode *mode = &dc->mode;
 
-		if (dc->out->flags & TEGRA_DC_OUT_ONE_SHOT_MODE)
+/*		if (dc->out->flags & TEGRA_DC_OUT_ONE_SHOT_MODE)
 			info->var.pixclock = KHZ2PICOS(mode->rated_pclk / 1000);
 		else
-			info->var.pixclock = KHZ2PICOS(mode->pclk / 1000);
+*/			info->var.pixclock = KHZ2PICOS(mode->pclk / 1000);
 		info->var.left_margin = mode->h_back_porch;
 		info->var.right_margin = mode->h_front_porch;
 		info->var.upper_margin = mode->v_back_porch;

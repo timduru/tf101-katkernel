@@ -2,7 +2,7 @@
  * arch/arm/mach-tegra/include/mach/pm.h
  *
  * Copyright (C) 2010 Google, Inc.
- * Copyright (C) 2010-2011 NVIDIA Corporation
+ * Copyright (C) 2010-2012 NVIDIA Corporation
  *
  * Author:
  *	Colin Cross <ccross@google.com>
@@ -28,6 +28,10 @@
 #include <linux/clkdev.h>
 
 #include <mach/iomap.h>
+
+#define PMC_SCRATCH0		0x50
+#define PMC_SCRATCH1		0x54
+#define PMC_SCRATCH4		0x60
 
 enum tegra_suspend_mode {
 	TEGRA_SUSPEND_NONE = 0,
@@ -60,6 +64,7 @@ struct tegra_suspend_platform_data {
 	void (*board_suspend)(int lp_state, enum suspend_stage stg);
 	/* lp_state = 0 for LP0 state, 1 for LP1 state, 2 for LP2 state */
 	void (*board_resume)(int lp_state, enum resume_stage stg);
+	unsigned int cpu_resume_boost;	/* CPU frequency resume boost in kHz */
 };
 
 /* Tegra io dpd entry - for each supported driver */
@@ -152,6 +157,8 @@ unsigned long tegra2_lp2_timer_remain(void);
 #ifdef CONFIG_ARCH_TEGRA_3x_SOC
 void tegra3_lp2_set_trigger(unsigned long cycles);
 unsigned long tegra3_lp2_timer_remain(void);
+int tegra3_is_lp2_timer_ready(unsigned int cpu);
+void tegra3_lp2_timer_cancel_secondary(void);
 #endif
 
 static inline void tegra_lp0_suspend_init(void)
@@ -178,6 +185,22 @@ static inline unsigned long tegra_lp2_timer_remain(void)
 #endif
 #ifdef CONFIG_ARCH_TEGRA_3x_SOC
 	return tegra3_lp2_timer_remain();
+#endif
+}
+
+static inline int tegra_is_lp2_timer_ready(unsigned int cpu)
+{
+#if defined(CONFIG_TEGRA_LP2_ARM_TWD) || defined(CONFIG_ARCH_TEGRA_2x_SOC)
+	return 1;
+#else
+	return tegra3_is_lp2_timer_ready(cpu);
+#endif
+}
+
+static inline void tegra_lp2_timer_cancel_secondary(void)
+{
+#ifndef CONFIG_ARCH_TEGRA_2x_SOC
+	tegra3_lp2_timer_cancel_secondary();
 #endif
 }
 

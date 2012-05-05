@@ -2487,6 +2487,8 @@ struct mnt_namespace *create_mnt_ns(struct vfsmount *mnt)
 }
 EXPORT_SYMBOL(create_mnt_ns);
 
+extern int suspend_process_going;
+
 SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 		char __user *, type, unsigned long, flags, void __user *, data)
 {
@@ -2495,7 +2497,10 @@ SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 	char *kernel_dir;
 	char *kernel_dev;
 	unsigned long data_page;
-
+	
+	if(suspend_process_going)
+		return 1;
+	
 	ret = copy_mount_string(type, &kernel_type);
 	if (ret < 0)
 		goto out_type;

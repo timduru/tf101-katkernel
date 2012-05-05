@@ -25,6 +25,9 @@
 #include <linux/proc_fs.h>
 #endif
 #include "power.h"
+#include <linux/delay.h>
+
+extern int asusec_suspend_hub_callback(void);
 
 enum {
 	DEBUG_EXIT_SUSPEND = 1U << 0,
@@ -270,15 +273,20 @@ static void suspend_backoff(void)
 			  msecs_to_jiffies(SUSPEND_BACKOFF_INTERVAL));
 }
 int suspend_process_going=0;
+//int first_suspend=0;
+extern void auto_dump_kernel_log(void);
+extern void clean_iram_log(char *string);
 static void suspend(struct work_struct *work)
 {
 	int ret;
 	int entry_event_num;
 	struct timespec ts_entry, ts_exit;
 
+	printk("wakelock suspend+\n");
 	if (has_wake_lock(WAKE_LOCK_SUSPEND)) {
-		if (debug_mask & DEBUG_SUSPEND)
-			pr_info("suspend: abort suspend\n");
+		printk("suspend: abort suspend\n");
+//		if (debug_mask & DEBUG_SUSPEND)
+//			pr_info("suspend: abort suspend\n");
 		return;
 	}
 
@@ -288,10 +296,21 @@ static void suspend(struct work_struct *work)
 		pr_info("suspend: enter suspend\n");
 	getnstimeofday(&ts_entry);
 	suspend_process_going=1;
-	disable_irq(gpio_to_irq(TEGRA_GPIO_PX5));	
+//	first_suspend=1;
+	auto_dump_kernel_log();
+/*	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
+		asusec_suspend_hub_callback();
+//		msleep(6000);	
+//		cpu_down(1);
+	}
+*/	disable_irq(gpio_to_irq(TEGRA_GPIO_PX5));	
+	printk("call pm_suspend+\n");
 	ret = pm_suspend(requested_suspend_state);
+	printk("call pm_suspend-\n");	
 	enable_irq(gpio_to_irq(TEGRA_GPIO_PX5));
 	suspend_process_going=0;	
+	clean_iram_log("exit suspend");
+//	cpu_up(1);
 	getnstimeofday(&ts_exit);
 
 	if (debug_mask & DEBUG_EXIT_SUSPEND) {
@@ -319,6 +338,8 @@ static void suspend(struct work_struct *work)
 			pr_info("suspend: pm_suspend returned with no event\n");
 		wake_lock_timeout(&unknown_wakeup, HZ / 2);
 	}
+	printk("wakelock suspend-\n");
+
 }
 static DECLARE_WORK(suspend_work, suspend);
 
@@ -348,7 +369,8 @@ static int power_suspend_late(struct device *dev)
 #endif
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("power_suspend_late return %d\n", ret);
-	return ret;
+//	return ret;
+	return 0;
 }
 
 static struct dev_pm_ops power_driver_pm_ops = {

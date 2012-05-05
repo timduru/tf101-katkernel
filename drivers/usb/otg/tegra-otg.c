@@ -447,6 +447,7 @@ static int tegra_otg_suspend(struct device *dev)
 	/* store the interupt enable for cable ID and VBUS */
 	clk_enable(tegra_otg->clk);
 	tegra_otg->intr_reg_data = readl(tegra_otg->regs + USB_PHY_WAKEUP);
+//	writel(0, (tegra_otg->regs + USB_PHY_WAKEUP));
 	clk_disable(tegra_otg->clk);
 	printk(KERN_INFO "%s tegra_otg->intr_reg_data=%#X\n", __func__, tegra_otg->intr_reg_data);
 	if (from == OTG_STATE_B_PERIPHERAL && otg->gadget) {
@@ -470,7 +471,7 @@ static void tegra_otg_resume(struct device *dev)
 	 * It is placed here after observing system hang.
 	 * Root cause is not confirmed.
 	 */
-	msleep(1);
+	msleep(10);
 	/* restore the interupt enable for cable ID and VBUS */
 	clk_enable(tegra_otg->clk);
 	if (!(tegra_otg->intr_reg_data & USB_VBUS_INT_EN) || !(tegra_otg->intr_reg_data & USB_VBUS_WAKEUP_EN) ||

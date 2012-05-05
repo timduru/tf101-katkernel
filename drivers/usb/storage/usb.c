@@ -823,6 +823,9 @@ static void release_everything(struct us_data *us)
 	scsi_host_put(us_to_host(us));
 }
 
+extern int suspend_process_going;
+extern int display_on;
+//extern int first_suspend;
 /* Thread to carry out delayed SCSI-device scanning */
 static int usb_stor_scan_thread(void * __us)
 {
@@ -850,7 +853,18 @@ static int usb_stor_scan_thread(void * __us)
 				test_bit(US_FLIDX_DONT_SCAN, &us->dflags),
 				delay_use * HZ);
 	}
-
+	
+	if	(suspend_process_going) {
+		printk("suspending, abort scanning\n");
+		goto end;
+	}
+/*	if	(!display_on) {
+		printk("Display off, delay scanning\n");
+		wait_event_interruptible_timeout(us->delay_wait,
+				test_bit(US_FLIDX_DONT_SCAN, &us->dflags),
+				10 * HZ);
+	}
+*/		
 	/* If the device is still connected, perform the scanning */
 	if (!test_bit(US_FLIDX_DONT_SCAN, &us->dflags)) {
 
@@ -866,7 +880,7 @@ static int usb_stor_scan_thread(void * __us)
 
 		/* Should we unbind if no devices were detected? */
 	}
-
+end:
 	usb_autopm_put_interface(us->pusb_intf);
 	complete_and_exit(&us->scanning_done, 0);
 }

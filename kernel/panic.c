@@ -23,6 +23,7 @@
 #include <linux/init.h>
 #include <linux/nmi.h>
 #include <linux/dmi.h>
+#include <asm/io.h>
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -54,6 +55,43 @@ static long no_blink(int state)
 /* Returns how long it waited in ms */
 long (*panic_blink)(int state);
 EXPORT_SYMBOL(panic_blink);
+
+/*	Auto dump kernel log when kernel panic occur.
+*	kernel panic message will be passed at the address IRAM_CMD_ADDRESS
+*	kernel log buffer address will be passed at the address IRAM_KERNEL_LOG_BUFFER
+*/
+#define IRAM_CMD_ADDRESS 0x4001F000
+#define IRAM_KERNEL_LOG_BUFFER	0x40020000
+extern char *auto_dump_log_buf_ptr;
+
+void auto_dump_kernel_log(void){
+	void __iomem *cmd_addr;
+	void __iomem *log_addr;	   
+	char panic_string[16];
+	
+	cmd_addr = ioremap(IRAM_CMD_ADDRESS,8);
+	log_addr = ioremap(IRAM_KERNEL_LOG_BUFFER,8);
+	strcpy(panic_string,"kernel panic");	
+	memcpy(cmd_addr,panic_string,strlen(panic_string)+1);
+	memcpy(log_addr,auto_dump_log_buf_ptr, 128*1024);
+}
+void clean_iram_log(char *string){
+	static void __iomem *cmd_addr=NULL;
+       static void __iomem *log_addr=NULL;
+
+	if( !cmd_addr || !log_addr ){
+		cmd_addr=ioremap(IRAM_CMD_ADDRESS,8);
+		log_addr=ioremap(IRAM_KERNEL_LOG_BUFFER,8);
+	}
+	if(!string){
+		printk("clean_iram_log:string is null, return;\n");
+		return;
+	}
+	memcpy(cmd_addr,string,strlen(string)+1);
+	memset(log_addr,0, 128*1024);
+}
+
+
 
 /**
  *	panic - halt the system
@@ -109,6 +147,8 @@ NORET_TYPE void panic(const char * fmt, ...)
 
 	if (!panic_blink)
 		panic_blink = no_blink;
+	
+	auto_dump_kernel_log();
 
 	if (panic_timeout > 0) {
 		/*

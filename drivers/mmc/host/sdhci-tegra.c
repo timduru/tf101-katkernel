@@ -29,6 +29,7 @@
 
 #include "sdhci.h"
 #include "sdhci-pltfm.h"
+#include "../debug_mmc.h"
 
 #define SDHCI_VENDOR_CLOCK_CNTRL	0x100
 #define SDHCI_VENDOR_CLOCK_CNTRL_SDMMC_CLK	0x1
@@ -268,6 +269,7 @@ static void sdhci_status_notify_cb(int card_present, void *dev_id)
 static irqreturn_t carddetect_irq(int irq, void *data)
 {
 	struct sdhci_host *sdhost = (struct sdhci_host *)data;
+//	MMC_printk("%s: gpio_%d:%d", mmc_hostname(sdhost->mmc), SD_CARD_DETECT, gpio_get_value(SD_CARD_DETECT));
 
 	tasklet_schedule(&sdhost->card_tasklet);
 	return IRQ_HANDLED;
@@ -799,6 +801,7 @@ static int tegra_sdhci_resume(struct sdhci_host *sdhci)
 	struct tegra_sdhci_host *tegra_host = pltfm_host->priv;
 	unsigned long timeout;
 
+	printk("tegra_sdhci_resume\n");
 	/* Skip the power rail re-enabled of MMC type mmc0 for HW watchdog mechanism */
 	if (!strcmp(mmc_hostname(sdhci->mmc), "mmc0")) {
 		pr_info("skip the power rail re-enabled of %s", mmc_hostname(sdhci->mmc));

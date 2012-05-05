@@ -837,7 +837,7 @@ int dpm_suspend_noirq(pm_message_t state)
 		mutex_unlock(&dpm_list_mtx);
 
 		error = device_suspend_noirq(dev, state);
-
+		
 		mutex_lock(&dpm_list_mtx);
 		if (error) {
 			pm_dev_err(dev, state, " late", error);

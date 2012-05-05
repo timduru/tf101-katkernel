@@ -70,7 +70,8 @@ static int tegra_idle_enter_lp3(struct cpuidle_device *dev,
 
 	enter = ktime_get();
 
-	tegra_cpu_wfi();
+//	if (!need_resched())
+		tegra_cpu_wfi();
 
 	exit = ktime_sub(ktime_get(), enter);
 	us = ktime_to_us(exit);

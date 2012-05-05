@@ -198,7 +198,7 @@ struct tegra_stereo_out {
 
 struct tegra_dc_mode {
 	int	pclk;
-	int	rated_pclk;
+//	int	rated_pclk;
 	int	h_ref_to_sync;
 	int	v_ref_to_sync;
 	int	h_sync_width;

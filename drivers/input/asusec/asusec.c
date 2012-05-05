@@ -1361,9 +1361,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 					asusec_reset_dock();
 					msleep(200);
 					asusec_chip_init(ec_chip->client);
-				} else {
-					printk("Fail?\n");
-				}
+				} 
 			} else {
 				ASUSEC_NOTICE("Keyboard is closed\n");
 			}
@@ -2273,7 +2271,13 @@ int asusec_suspend_hub_callback(void){
 	ASUSEC_NOTICE("suspend\n");
 	if (ec_chip->dock_in){
 		ret_val = asusec_i2c_test(ec_chip->client);
-		if(ret_val < 0){
+/*		if(ret_val < 0){
+			asusec_reset_dock();
+			msleep(500);
+			ret_val = asusec_i2c_test(ec_chip->client);
+		}
+*/		if(ret_val < 0){
+			printk("fail to access ec\n");
 			goto fail_to_access_ec;
 		}
 		

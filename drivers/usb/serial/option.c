@@ -28,24 +28,13 @@
   device features.
 */
 
-/* This is removed due to the selective suspend support from HUAWEI.
 #define DRIVER_VERSION "v0.7.2"
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-#define DRIVER_VERSION "v0.7.2.1"
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 #define DRIVER_AUTHOR "Matthias Urlichs <smurf@smurf.noris.de>"
-/* This is removed due to the selective suspend support from HUAWEI.
 #define DRIVER_DESC "USB Driver for GSM modems"
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-#define DRIVER_DESC "USB Driver for GSM modems with Selective Suspend"
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 
 #include <linux/kernel.h>
 #include <linux/jiffies.h>
 #include <linux/errno.h>
-#include <linux/gpio.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/slab.h>
@@ -53,65 +42,13 @@
 #include <linux/bitops.h>
 #include <linux/usb.h>
 #include <linux/usb/serial.h>
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-#include <linux/version.h>
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-#include <linux/wakelock.h>
-/* This is removed out due to the selective suspend support from HUAWEI.
 #include "usb-wwan.h"
-*/
-
-#include "../../../arch/arm/mach-tegra/gpio-names.h"
-
-#define GPIO_MODEM_WAKEUP TEGRA_GPIO_PQ6
-
-#ifdef CONFIG_DEBUG_ASUS
-extern int logActivate;
-#endif
 
 /* Function prototypes */
 static int  option_probe(struct usb_serial *serial,
 			const struct usb_device_id *id);
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-static int option_open(struct tty_struct *tty, struct usb_serial_port *port);
-static int  option_startup(struct usb_serial *serial);
-static void option_disconnect(struct usb_serial *serial);
-static void option_release(struct usb_serial *serial);
-static int  option_write_room(struct tty_struct *tty);
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-
-/* This is removed out due to the selective suspned support from HUAWEI.
 static int option_send_setup(struct usb_serial_port *port);
-*/
 static void option_instat_callback(struct urb *urb);
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-static int option_write(struct tty_struct *tty, struct usb_serial_port *port,
-			const unsigned char *buf, int count);
-static int  option_chars_in_buffer(struct tty_struct *tty);
-static void option_set_termios(struct tty_struct *tty,
-			struct usb_serial_port *port, struct ktermios *old);
-static int  option_tiocmget(struct tty_struct *tty, struct file *file);
-static int  option_tiocmset(struct tty_struct *tty, struct file *file,
-				unsigned int set, unsigned int clear);
-
-
-#if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-static void option_close(struct tty_struct *tty, struct usb_serial_port *port, struct file *filp);
-static int  option_send_setup(struct tty_struct *tty, struct usb_serial_port *port);
-static void option_shutdown(struct usb_serial *serial);
-#else
-static void option_close(struct usb_serial_port *port);
-static void option_dtr_rts(struct usb_serial_port *port, int on);
-static int  option_send_setup(struct usb_serial_port *port);
-#endif
-
-#ifdef CONFIG_PM
-static int  option_suspend(struct usb_serial *serial, pm_message_t message);
-static int  option_resume(struct usb_serial *serial);
-#endif
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 
 /* Vendor and product IDs */
 #define OPTION_VENDOR_ID			0x0AF0
@@ -211,7 +148,15 @@ static int  option_resume(struct usb_serial *serial);
 #define HUAWEI_PRODUCT_K4505			0x1464
 #define HUAWEI_PRODUCT_K3765			0x1465
 #define HUAWEI_PRODUCT_E14AC			0x14AC
+#define HUAWEI_PRODUCT_K3806			0x14AE
+#define HUAWEI_PRODUCT_K4605			0x14C6
+#define HUAWEI_PRODUCT_K3770			0x14C9
+#define HUAWEI_PRODUCT_K3771			0x14CA
+#define HUAWEI_PRODUCT_K4510			0x14CB
+#define HUAWEI_PRODUCT_K4511			0x14CC
 #define HUAWEI_PRODUCT_ETS1220			0x1803
+#define HUAWEI_PRODUCT_E353			0x1506
+#define HUAWEI_PRODUCT_E173S			0x1C05
 
 #define QUANTA_VENDOR_ID			0x0408
 #define QUANTA_PRODUCT_Q101			0xEA02
@@ -372,10 +317,9 @@ static int  option_resume(struct usb_serial *serial);
 #define ZTE_PRODUCT_AC8710			0xfff1
 #define ZTE_PRODUCT_AC2726			0xfff5
 #define ZTE_PRODUCT_AC8710T			0xffff
-
-/* ZTE PRODUCTS -- alternate vendor ID */
-#define ZTE_VENDOR_ID2				0x1d6b
-#define ZTE_PRODUCT_MF_330			0x0002
+#define ZTE_PRODUCT_MC2718			0xffe8
+#define ZTE_PRODUCT_AD3812			0xffeb
+#define ZTE_PRODUCT_MC2716			0xffed
 
 #define BENQ_VENDOR_ID				0x04a5
 #define BENQ_PRODUCT_H10			0x4068
@@ -402,11 +346,12 @@ static int  option_resume(struct usb_serial *serial);
 #define TOSHIBA_PRODUCT_G450			0x0d45
 
 #define ALINK_VENDOR_ID				0x1e0e
+#define ALINK_PRODUCT_PH300			0x9100
 #define ALINK_PRODUCT_3GU			0x9200
 
 /* ALCATEL PRODUCTS */
 #define ALCATEL_VENDOR_ID			0x1bbb
-#define ALCATEL_PRODUCT_X060S			0x0000
+#define ALCATEL_PRODUCT_X060S_X200		0x0000
 
 #define PIRELLI_VENDOR_ID			0x1266
 #define PIRELLI_PRODUCT_C100_1			0x1002
@@ -441,11 +386,23 @@ static int  option_resume(struct usb_serial *serial);
  * It seems to contain a Qualcomm QSC6240/6290 chipset            */
 #define FOUR_G_SYSTEMS_PRODUCT_W14		0x9603
 
+/* Zoom */
+#define ZOOM_PRODUCT_4597			0x9607
+
 /* Haier products */
 #define HAIER_VENDOR_ID				0x201e
 #define HAIER_PRODUCT_CE100			0x2009
 
-#define CINTERION_VENDOR_ID			0x0681
+/* Cinterion (formerly Siemens) products */
+#define SIEMENS_VENDOR_ID				0x0681
+#define CINTERION_VENDOR_ID				0x1e2d
+#define CINTERION_PRODUCT_HC25_MDM		0x0047
+#define CINTERION_PRODUCT_HC25_MDMNET	0x0040
+#define CINTERION_PRODUCT_HC28_MDM		0x004C
+#define CINTERION_PRODUCT_HC28_MDMNET	0x004A /* same for HC28J */
+#define CINTERION_PRODUCT_EU3_E			0x0051
+#define CINTERION_PRODUCT_EU3_P			0x0052
+#define CINTERION_PRODUCT_PH8			0x0053
 
 /* Olivetti products */
 #define OLIVETTI_VENDOR_ID			0x0b3c
@@ -455,6 +412,78 @@ static int  option_resume(struct usb_serial *serial);
 #define CELOT_VENDOR_ID				0x211f
 #define CELOT_PRODUCT_CT680M			0x6801
 
+/* ONDA Communication vendor id */
+#define ONDA_VENDOR_ID       0x1ee8
+
+/* ONDA MT825UP HSDPA 14.2 modem */
+#define ONDA_MT825UP         0x000b
+
+/* Samsung products */
+#define SAMSUNG_VENDOR_ID                       0x04e8
+#define SAMSUNG_PRODUCT_GT_B3730                0x6889
+
+/* YUGA products  www.yuga-info.com*/
+#define YUGA_VENDOR_ID				0x257A
+#define YUGA_PRODUCT_CEM600			0x1601
+#define YUGA_PRODUCT_CEM610			0x1602
+#define YUGA_PRODUCT_CEM500			0x1603
+#define YUGA_PRODUCT_CEM510			0x1604
+#define YUGA_PRODUCT_CEM800			0x1605
+#define YUGA_PRODUCT_CEM900			0x1606
+
+#define YUGA_PRODUCT_CEU818			0x1607
+#define YUGA_PRODUCT_CEU816			0x1608
+#define YUGA_PRODUCT_CEU828			0x1609
+#define YUGA_PRODUCT_CEU826			0x160A
+#define YUGA_PRODUCT_CEU518			0x160B
+#define YUGA_PRODUCT_CEU516			0x160C
+#define YUGA_PRODUCT_CEU528			0x160D
+#define YUGA_PRODUCT_CEU526			0x160F
+
+#define YUGA_PRODUCT_CWM600			0x2601
+#define YUGA_PRODUCT_CWM610			0x2602
+#define YUGA_PRODUCT_CWM500			0x2603
+#define YUGA_PRODUCT_CWM510			0x2604
+#define YUGA_PRODUCT_CWM800			0x2605
+#define YUGA_PRODUCT_CWM900			0x2606
+
+#define YUGA_PRODUCT_CWU718			0x2607
+#define YUGA_PRODUCT_CWU716			0x2608
+#define YUGA_PRODUCT_CWU728			0x2609
+#define YUGA_PRODUCT_CWU726			0x260A
+#define YUGA_PRODUCT_CWU518			0x260B
+#define YUGA_PRODUCT_CWU516			0x260C
+#define YUGA_PRODUCT_CWU528			0x260D
+#define YUGA_PRODUCT_CWU526			0x260F
+
+#define YUGA_PRODUCT_CLM600			0x2601
+#define YUGA_PRODUCT_CLM610			0x2602
+#define YUGA_PRODUCT_CLM500			0x2603
+#define YUGA_PRODUCT_CLM510			0x2604
+#define YUGA_PRODUCT_CLM800			0x2605
+#define YUGA_PRODUCT_CLM900			0x2606
+
+#define YUGA_PRODUCT_CLU718			0x2607
+#define YUGA_PRODUCT_CLU716			0x2608
+#define YUGA_PRODUCT_CLU728			0x2609
+#define YUGA_PRODUCT_CLU726			0x260A
+#define YUGA_PRODUCT_CLU518			0x260B
+#define YUGA_PRODUCT_CLU516			0x260C
+#define YUGA_PRODUCT_CLU528			0x260D
+#define YUGA_PRODUCT_CLU526			0x260F
+
+/* Viettel products */
+#define VIETTEL_VENDOR_ID			0x2262
+#define VIETTEL_PRODUCT_VT1000			0x0002
+
+/* ZD Incorporated */
+#define ZD_VENDOR_ID				0x0685
+#define ZD_PRODUCT_7000				0x7000
+
+/* LG products */
+#define LG_VENDOR_ID				0x1004
+#define LG_PRODUCT_L02C				0x618f
+
 /* some devices interfaces need special handling due to a number of reasons */
 enum option_blacklist_reason {
 		OPTION_BLACKLIST_NONE = 0,
@@ -462,17 +491,66 @@ enum option_blacklist_reason {
 		OPTION_BLACKLIST_RESERVED_IF = 2
 };
 
+#define MAX_BL_NUM  8
 struct option_blacklist_info {
-	const u32 infolen;	/* number of interface numbers on blacklist */
-	const u8  *ifaceinfo;	/* pointer to the array holding the numbers */
-	enum option_blacklist_reason reason;
+	/* bitfield of interface numbers for OPTION_BLACKLIST_SENDSETUP */
+	const unsigned long sendsetup;
+	/* bitfield of interface numbers for OPTION_BLACKLIST_RESERVED_IF */
+	const unsigned long reserved;
 };
 
-static const u8 four_g_w14_no_sendsetup[] = { 0, 1 };
 static const struct option_blacklist_info four_g_w14_blacklist = {
-	.infolen = ARRAY_SIZE(four_g_w14_no_sendsetup),
-	.ifaceinfo = four_g_w14_no_sendsetup,
-	.reason = OPTION_BLACKLIST_SENDSETUP
+	.sendsetup = BIT(0) | BIT(1),
+};
+
+static const struct option_blacklist_info alcatel_x200_blacklist = {
+	.sendsetup = BIT(0) | BIT(1),
+};
+
+static const struct option_blacklist_info zte_0037_blacklist = {
+	.sendsetup = BIT(0) | BIT(1),
+};
+
+static const struct option_blacklist_info zte_k3765_z_blacklist = {
+	.sendsetup = BIT(0) | BIT(1) | BIT(2),
+	.reserved = BIT(4),
+};
+
+static const struct option_blacklist_info zte_ad3812_z_blacklist = {
+	.sendsetup = BIT(0) | BIT(1) | BIT(2),
+};
+
+static const struct option_blacklist_info zte_mc2718_z_blacklist = {
+	.sendsetup = BIT(1) | BIT(2) | BIT(3) | BIT(4),
+};
+
+static const struct option_blacklist_info zte_mc2716_z_blacklist = {
+	.sendsetup = BIT(1) | BIT(2) | BIT(3),
+};
+
+static const struct option_blacklist_info huawei_cdc12_blacklist = {
+	.reserved = BIT(1) | BIT(2),
+};
+
+static const struct option_blacklist_info net_intf1_blacklist = {
+	.reserved = BIT(1),
+};
+
+static const struct option_blacklist_info net_intf3_blacklist = {
+	.reserved = BIT(3),
+};
+
+static const struct option_blacklist_info net_intf4_blacklist = {
+	.reserved = BIT(4),
+};
+
+static const struct option_blacklist_info net_intf5_blacklist = {
+	.reserved = BIT(5),
+};
+
+static const struct option_blacklist_info zte_mf626_blacklist = {
+	.sendsetup = BIT(0) | BIT(1),
+	.reserved = BIT(4),
 };
 
 static const struct usb_device_id option_ids[] = {
@@ -572,10 +650,33 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E143D, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E143E, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E143F, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4505, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3765, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E173S, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4505, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t) &huawei_cdc12_blacklist },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3765, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t) &huawei_cdc12_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_ETS1220, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E14AC, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3806, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4605, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t) &huawei_cdc12_blacklist },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3770, 0xff, 0x02, 0x31) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3770, 0xff, 0x02, 0x32) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3771, 0xff, 0x02, 0x31) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K3771, 0xff, 0x02, 0x32) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4510, 0xff, 0x01, 0x31) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4510, 0xff, 0x01, 0x32) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4511, 0xff, 0x01, 0x31) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_K4511, 0xff, 0x01, 0x32) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x01, 0x01) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x01, 0x02) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x01, 0x03) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x01, 0x10) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x01, 0x12) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x01, 0x13) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x02, 0x01) },  /* E398 3G Modem */
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x02, 0x02) },  /* E398 3G PC UI Interface */
+	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, HUAWEI_PRODUCT_E353, 0xff, 0x02, 0x03) },  /* E398 3G Application Interface */
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_V640) },
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_V620) },
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_V740) },
@@ -662,17 +763,18 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(KYOCERA_VENDOR_ID, KYOCERA_PRODUCT_KPC680) },
 	{ USB_DEVICE(QUALCOMM_VENDOR_ID, 0x6000)}, /* ZTE AC8700 */
 	{ USB_DEVICE(QUALCOMM_VENDOR_ID, 0x6613)}, /* Onda H600/ZTE MF330 */
+	{ USB_DEVICE(QUALCOMM_VENDOR_ID, 0x9000)}, /* SIMCom SIM5218 */
 	{ USB_DEVICE(CMOTECH_VENDOR_ID, CMOTECH_PRODUCT_6280) }, /* BP3-USB & BP3-EXT HSDPA */
 	{ USB_DEVICE(CMOTECH_VENDOR_ID, CMOTECH_PRODUCT_6008) },
 	{ USB_DEVICE(TELIT_VENDOR_ID, TELIT_PRODUCT_UC864E) },
 	{ USB_DEVICE(TELIT_VENDOR_ID, TELIT_PRODUCT_UC864G) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_MF622, 0xff, 0xff, 0xff) }, /* ZTE WCDMA products */
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0002, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0002, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf1_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0003, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0004, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0005, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0006, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0007, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0008, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0009, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x000a, 0xff, 0xff, 0xff) },
@@ -683,50 +785,62 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x000f, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0010, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0011, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0012, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0012, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf1_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0013, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0014, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_MF628, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0016, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0017, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0017, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf3_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0018, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0019, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0020, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0021, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0021, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0022, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0023, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0024, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0025, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0025, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf1_blacklist },
 	/* { USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0026, 0xff, 0xff, 0xff) }, */
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0028, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0029, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0030, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_MF626, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_MF626, 0xff,
+	  0xff, 0xff), .driver_info = (kernel_ulong_t)&zte_mf626_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0032, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0033, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0034, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0037, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0037, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&zte_0037_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0038, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0039, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0040, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0042, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0042, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0043, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0044, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0048, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0049, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0049, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf5_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0050, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0051, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0052, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0052, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	/* { USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0053, 0xff, 0xff, 0xff) }, */
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0054, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0055, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0055, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf1_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0056, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0057, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0058, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0058, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0059, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0061, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0062, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0063, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0063, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0064, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0065, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0066, 0xff, 0xff, 0xff) },
@@ -741,11 +855,13 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0083, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0086, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0087, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0104, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0104, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0105, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0106, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0108, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0113, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0113, 0xff, 0xff, 0xff),
+		.driver_info = (kernel_ulong_t)&net_intf5_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0117, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0118, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0121, 0xff, 0xff, 0xff) },
@@ -958,13 +1074,19 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0073, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0130, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x0141, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x2002, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x2002, 0xff,
+	  0xff, 0xff), .driver_info = (kernel_ulong_t)&zte_k3765_z_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, 0x2003, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_CDMA_TECH, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_AC8710, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_AC2726, 0xff, 0xff, 0xff) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_AC8710T, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE(ZTE_VENDOR_ID2, ZTE_PRODUCT_MF_330) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_MC2718, 0xff, 0xff, 0xff),
+	 .driver_info = (kernel_ulong_t)&zte_mc2718_z_blacklist },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_AD3812, 0xff, 0xff, 0xff),
+	 .driver_info = (kernel_ulong_t)&zte_ad3812_z_blacklist },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZTE_VENDOR_ID, ZTE_PRODUCT_MC2716, 0xff, 0xff, 0xff),
+	 .driver_info = (kernel_ulong_t)&zte_mc2716_z_blacklist },
 	{ USB_DEVICE(BENQ_VENDOR_ID, BENQ_PRODUCT_H10) },
 	{ USB_DEVICE(DLINK_VENDOR_ID, DLINK_PRODUCT_DWM_652) },
 	{ USB_DEVICE(ALINK_VENDOR_ID, DLINK_PRODUCT_DWM_652_U5) }, /* Yes, ALINK_VENDOR_ID */
@@ -977,13 +1099,17 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(TOSHIBA_VENDOR_ID, TOSHIBA_PRODUCT_G450) },
 	{ USB_DEVICE(TOSHIBA_VENDOR_ID, TOSHIBA_PRODUCT_HSDPA_MINICARD ) }, /* Toshiba 3G HSDPA == Novatel Expedite EU870D MiniCard */
 	{ USB_DEVICE(ALINK_VENDOR_ID, 0x9000) },
+	{ USB_DEVICE(ALINK_VENDOR_ID, ALINK_PRODUCT_PH300) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(ALINK_VENDOR_ID, ALINK_PRODUCT_3GU, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE(ALCATEL_VENDOR_ID, ALCATEL_PRODUCT_X060S) },
+	{ USB_DEVICE(ALCATEL_VENDOR_ID, ALCATEL_PRODUCT_X060S_X200),
+	  .driver_info = (kernel_ulong_t)&alcatel_x200_blacklist
+	},
 	{ USB_DEVICE(AIRPLUS_VENDOR_ID, AIRPLUS_PRODUCT_MCD650) },
 	{ USB_DEVICE(TLAYTECH_VENDOR_ID, TLAYTECH_PRODUCT_TEU800) },
 	{ USB_DEVICE(LONGCHEER_VENDOR_ID, FOUR_G_SYSTEMS_PRODUCT_W14),
   	  .driver_info = (kernel_ulong_t)&four_g_w14_blacklist
   	},
+	{ USB_DEVICE(LONGCHEER_VENDOR_ID, ZOOM_PRODUCT_4597) },
 	{ USB_DEVICE(HAIER_VENDOR_ID, HAIER_PRODUCT_CE100) },
 	/* Pirelli  */
 	{ USB_DEVICE(PIRELLI_VENDOR_ID, PIRELLI_PRODUCT_C100_1)},
@@ -1002,9 +1128,66 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(PIRELLI_VENDOR_ID, PIRELLI_PRODUCT_100F) },
 	{ USB_DEVICE(PIRELLI_VENDOR_ID, PIRELLI_PRODUCT_1011)},
 	{ USB_DEVICE(PIRELLI_VENDOR_ID, PIRELLI_PRODUCT_1012)},
-	{ USB_DEVICE(CINTERION_VENDOR_ID, 0x0047) },
+	/* Cinterion */
+	{ USB_DEVICE(CINTERION_VENDOR_ID, CINTERION_PRODUCT_EU3_E) },
+	{ USB_DEVICE(CINTERION_VENDOR_ID, CINTERION_PRODUCT_EU3_P) },
+	{ USB_DEVICE(CINTERION_VENDOR_ID, CINTERION_PRODUCT_PH8) },
+	{ USB_DEVICE(CINTERION_VENDOR_ID, CINTERION_PRODUCT_HC28_MDM) }, 
+	{ USB_DEVICE(CINTERION_VENDOR_ID, CINTERION_PRODUCT_HC28_MDMNET) },
+	{ USB_DEVICE(SIEMENS_VENDOR_ID, CINTERION_PRODUCT_HC25_MDM) },
+	{ USB_DEVICE(SIEMENS_VENDOR_ID, CINTERION_PRODUCT_HC25_MDMNET) },
+	{ USB_DEVICE(SIEMENS_VENDOR_ID, CINTERION_PRODUCT_HC28_MDM) }, /* HC28 enumerates with Siemens or Cinterion VID depending on FW revision */
+	{ USB_DEVICE(SIEMENS_VENDOR_ID, CINTERION_PRODUCT_HC28_MDMNET) },
+
 	{ USB_DEVICE(OLIVETTI_VENDOR_ID, OLIVETTI_PRODUCT_OLICARD100) },
 	{ USB_DEVICE(CELOT_VENDOR_ID, CELOT_PRODUCT_CT680M) }, /* CT-650 CDMA 450 1xEVDO modem */
+	{ USB_DEVICE(ONDA_VENDOR_ID, ONDA_MT825UP) }, /* ONDA MT825UP modem */
+	{ USB_DEVICE_AND_INTERFACE_INFO(SAMSUNG_VENDOR_ID, SAMSUNG_PRODUCT_GT_B3730, USB_CLASS_CDC_DATA, 0x00, 0x00) }, /* Samsung GT-B3730 LTE USB modem.*/
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEM600) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEM610) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEM500) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEM510) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEM800) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEM900) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU818) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU816) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU828) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU826) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU518) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU516) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU528) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CEU526) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWM600) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWM610) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWM500) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWM510) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWM800) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWM900) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU718) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU716) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU728) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU726) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU518) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU516) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU528) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CWU526) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLM600) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLM610) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLM500) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLM510) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLM800) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLM900) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU718) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU716) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU728) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU726) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU518) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU516) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU528) },
+	{ USB_DEVICE(YUGA_VENDOR_ID, YUGA_PRODUCT_CLU526) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(VIETTEL_VENDOR_ID, VIETTEL_PRODUCT_VT1000, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(ZD_VENDOR_ID, ZD_PRODUCT_7000, 0xff, 0xff, 0xff) },
+	{ USB_DEVICE(LG_VENDOR_ID, LG_PRODUCT_L02C) }, /* docomo L-02C modem */
 	{ } /* Terminating entry */
 };
 MODULE_DEVICE_TABLE(usb, option_ids);
@@ -1036,7 +1219,6 @@ static struct usb_serial_driver option_1port_device = {
 	.id_table          = option_ids,
 	.num_ports         = 1,
 	.probe             = option_probe,
-/* This is removed out due to the selective suspend support from HUAWEI.
 	.open              = usb_wwan_open,
 	.close             = usb_wwan_close,
 	.dtr_rts	   = usb_wwan_dtr_rts,
@@ -1046,39 +1228,14 @@ static struct usb_serial_driver option_1port_device = {
 	.set_termios       = usb_wwan_set_termios,
 	.tiocmget          = usb_wwan_tiocmget,
 	.tiocmset          = usb_wwan_tiocmset,
+	.ioctl             = usb_wwan_ioctl,
 	.attach            = usb_wwan_startup,
 	.disconnect        = usb_wwan_disconnect,
 	.release           = usb_wwan_release,
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-	.open              = option_open,
-	.close             = option_close,
-	.write             = option_write,
-	.write_room        = option_write_room,
-	.chars_in_buffer   = option_chars_in_buffer,
-	.set_termios       = option_set_termios,
-	.tiocmget          = option_tiocmget,
-	.tiocmset          = option_tiocmset,
-	.attach            = option_startup,
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	.shutdown	   = option_shutdown,
-#else
-	.dtr_rts	   = option_dtr_rts,
-	.release           = option_release,
-	.disconnect        = option_disconnect,
-#endif
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-
 	.read_int_callback = option_instat_callback,
 #ifdef CONFIG_PM
-/* This is removed out due to the selective suspend support from HUAWEI.
 	.suspend           = usb_wwan_suspend,
 	.resume            = usb_wwan_resume,
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-	.suspend           = option_suspend,
-	.resume            = option_resume,
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 #endif
 };
 
@@ -1090,14 +1247,6 @@ static int debug;
 #define N_OUT_URB 4
 #define IN_BUFLEN 4096
 #define OUT_BUFLEN 4096
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-struct option_intf_private {
-	spinlock_t susp_lock;
-	unsigned int suspended:1;
-	int in_flight;
-};
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 
 struct option_port_private {
 	/* Input endpoints and buffer for this port */
@@ -1121,17 +1270,6 @@ struct option_port_private {
 	unsigned long tx_start_time[N_OUT_URB];
 };
 
-static struct wake_lock modem_wakeup_wake_lock;
-static spinlock_t modem_wakeup_spinlock;
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-/*Begin: Declared the global variables for selective suspend feature by fangxiaozhi*/
-static struct delayed_work *hw_suspend_wq = NULL; 
-static void option_suspend_check_work(struct work_struct *work);
-static struct usb_device   *hw_udev = NULL;
-/*End: Declared the global variables for selective suspend feature by fangxiaozhi*/
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-
 /* Functions used by new usb-serial code. */
 static int __init option_init(void)
 {
@@ -1145,9 +1283,6 @@ static int __init option_init(void)
 
 	printk(KERN_INFO KBUILD_MODNAME ": " DRIVER_VERSION ":"
 	       DRIVER_DESC "\n");
-
-	wake_lock_init(&modem_wakeup_wake_lock, WAKE_LOCK_SUSPEND, "modem_wakeup_lock");
-	spin_lock_init(&modem_wakeup_spinlock);
 
 	return 0;
 
@@ -1166,76 +1301,35 @@ static void __exit option_exit(void)
 module_init(option_init);
 module_exit(option_exit);
 
-// +++++++ Leslie Yu +++++++
-static void *s_dev_id = NULL;
-
-// Added for handle the modem wakeup while the system is not suspended since the remote wakeup is not supported.
-static irqreturn_t modem_wakeup_irq_handler(int irq, void *dev_id)
+static bool is_blacklisted(const u8 ifnum, enum option_blacklist_reason reason,
+			   const struct option_blacklist_info *blacklist)
 {
-	int r = 0;
-	struct usb_serial *serial = s_dev_id;
+	unsigned long num;
+	const unsigned long *intf_list;
 
-	printk("modem_wakeup_irq_handler(): +\n");
-	printk("modem_wakeup_irq_handler(): Hold the wake lock for the modem wakeup pin for 2 seconds.\n");
-	wake_lock_timeout(&modem_wakeup_wake_lock, 2 * HZ);
+	if (blacklist) {
+		if (reason == OPTION_BLACKLIST_SENDSETUP)
+			intf_list = &blacklist->sendsetup;
+		else if (reason == OPTION_BLACKLIST_RESERVED_IF)
+			intf_list = &blacklist->reserved;
+		else {
+			BUG_ON(reason);
+			return false;
+		}
 
-	if (NULL == serial) {
-		printk("modem_wakeup_irq_handler(): There is no USB serial interface for this tty port.\n");
-	} else {
-		r = usb_autopm_get_interface_async(serial->interface);
-		if (r == 0) {
-			usb_autopm_put_interface_no_suspend(serial->interface);
+		for_each_set_bit(num, intf_list, MAX_BL_NUM + 1) {
+			if (num == ifnum)
+				return true;
 		}
 	}
-	printk("modem_wakeup_irq_handler(): -\n");
-
-	return IRQ_HANDLED;
+	return false;
 }
-
-static void init_modem_wakeup_irq_handler(void *dev_id)
-{
-	int modem_wakeup_irq = gpio_to_irq(GPIO_MODEM_WAKEUP);
-	int rc = 0;
-
-	spin_lock(&modem_wakeup_spinlock);
-	if (s_dev_id != NULL) {
-		printk("init_modem_wakeup_irq_handler(): No need to request IRQ again for this new tty port.\n");
-	} else {
-		s_dev_id = dev_id;
-		rc = request_irq(modem_wakeup_irq, modem_wakeup_irq_handler,
-				IRQF_TRIGGER_FALLING, "modem_wakeup_irq_handler", NULL);
-		if (rc < 0) {
-			printk("init_modem_wakeup_irq_handler(): Could not register modem_wakeup_irq_handler, irq = %d, rc = %d\n",
-					modem_wakeup_irq, rc);
-		}
-	}
-	spin_unlock(&modem_wakeup_spinlock);
-}
-
-static void free_modem_wakeup_irq_handler(void *dev_id)
-{
-	int modem_wakeup_irq = gpio_to_irq(GPIO_MODEM_WAKEUP);
-
-	spin_lock(&modem_wakeup_spinlock);
-	if (s_dev_id != dev_id) {
-		printk("init_modem_wakeup_irq_handler(): No need to free IRQ since we do not request IRQ for this tty port.\n");
-	} else {
-		s_dev_id = NULL;
-		free_irq(modem_wakeup_irq, NULL);
-	}
-	spin_unlock(&modem_wakeup_spinlock);
-}
-// ------- Leslie Yu -------
 
 static int option_probe(struct usb_serial *serial,
 			const struct usb_device_id *id)
 {
-/* This is removed out due to the selective suspend support from HUAWEI.
 	struct usb_wwan_intf_private *data;
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-	struct option_intf_private *data;
-// ------- This is added due to the selective suspend support from HUAWEI. -------
+
 	/* D-Link DWM 652 still exposes CD-Rom emulation interface in modem mode */
 	if (serial->dev->descriptor.idVendor == DLINK_VENDOR_ID &&
 		serial->dev->descriptor.idProduct == DLINK_PRODUCT_DWM_652 &&
@@ -1248,340 +1342,29 @@ static int option_probe(struct usb_serial *serial,
 		serial->interface->cur_altsetting->desc.bInterfaceClass != 0xff)
 		return -ENODEV;
 
-	/* Don't bind network interfaces on Huawei K3765 & K4505 */
-	if (serial->dev->descriptor.idVendor == HUAWEI_VENDOR_ID &&
-		(serial->dev->descriptor.idProduct == HUAWEI_PRODUCT_K3765 ||
-			serial->dev->descriptor.idProduct == HUAWEI_PRODUCT_K4505) &&
-		serial->interface->cur_altsetting->desc.bInterfaceNumber == 1)
+	/* Don't bind reserved interfaces (like network ones) which often have
+	 * the same class/subclass/protocol as the serial interfaces.  Look at
+	 * the Windows driver .INF files for reserved interface numbers.
+	 */
+	if (is_blacklisted(
+		serial->interface->cur_altsetting->desc.bInterfaceNumber,
+		OPTION_BLACKLIST_RESERVED_IF,
+		(const struct option_blacklist_info *) id->driver_info))
+
+	/* Don't bind network interface on Samsung GT-B3730, it is handled by a separate module */
+	if (serial->dev->descriptor.idVendor == SAMSUNG_VENDOR_ID &&
+		serial->dev->descriptor.idProduct == SAMSUNG_PRODUCT_GT_B3730 &&
+		serial->interface->cur_altsetting->desc.bInterfaceClass != USB_CLASS_CDC_DATA)
 		return -ENODEV;
 
-/* This is removed out due to the selective suspend support from HUAWEI.
 	data = serial->private = kzalloc(sizeof(struct usb_wwan_intf_private), GFP_KERNEL);
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-	data = serial->private = kzalloc(sizeof(struct option_intf_private), GFP_KERNEL);
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-
 	if (!data)
 		return -ENOMEM;
-/* This is removed out due to the selective suspend support from HUAWEI.
 	data->send_setup = option_send_setup;
-*/
 	spin_lock_init(&data->susp_lock);
-/* This is removed out due to the selective suspend support from HUAWEI.
 	data->private = (void *)id->driver_info;
-*/
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	if (serial->dev->descriptor.idVendor == HUAWEI_VENDOR_ID) {
-		printk(KERN_ERR"fxz-%s: [%p]\n", __func__, hw_udev);
-		if (NULL == hw_udev) {
-			printk(KERN_ERR"fxz-%s: !hw_udev\n", __func__);
-			hw_udev = interface_to_usbdev(serial->interface);
-			#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,33))
-				usb_enable_autosuspend(hw_udev);
-			#else
-				#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,6,33))
-				#else
-				hw_udev->autoresume_disabled = 0;
-				#endif
-				hw_udev->autosuspend_disabled = 0;
-			#endif
-		}
-		if (hw_udev == serial->dev && 
-			!hw_suspend_wq) {
-			hw_suspend_wq = kmalloc(sizeof(struct delayed_work), GFP_KERNEL);
-			if (!hw_suspend_wq) {
-				 printk(KERN_ERR "fxz-%s:Alloc memroy failed for hw_suspend_wq!\n", __func__);
-				 return -ENOMEM;
-			}
-			INIT_DELAYED_WORK(hw_suspend_wq, option_suspend_check_work);
-			schedule_delayed_work(hw_suspend_wq, 10 * HZ);	
-		}
-	}
-	/*End: Added for selective suspend by fangxiaozhi*/
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-
 	return 0;
 }
-
-/* This is removed out due to the selective suspend support from HUAWEI.
-static enum option_blacklist_reason is_blacklisted(const u8 ifnum,
-				const struct option_blacklist_info *blacklist)
-{
-	const u8  *info;
-	int i;
-
-	if (blacklist) {
-		info = blacklist->ifaceinfo;
-
-		for (i = 0; i < blacklist->infolen; i++) {
-			if (info[i] == ifnum)
-				return blacklist->reason;
-		}
-	}
-	return OPTION_BLACKLIST_NONE;
-}
-*/
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-static void option_set_termios(struct tty_struct *tty,
-		struct usb_serial_port *port, struct ktermios *old_termios)
-{
-	dbg("%s", __func__);
-	/* Doesn't support option setting */
-	tty_termios_copy_hw(tty->termios, old_termios);
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	option_send_setup(tty, port);
-#else
-	option_send_setup(port);
-#endif
-}
-
-static int option_tiocmget(struct tty_struct *tty, struct file *file)
-{
-	struct usb_serial_port *port = tty->driver_data;
-	unsigned int value;
-	struct option_port_private *portdata;
-
-	portdata = usb_get_serial_port_data(port);
-
-	value = ((portdata->rts_state) ? TIOCM_RTS : 0) |
-		((portdata->dtr_state) ? TIOCM_DTR : 0) |
-		((portdata->cts_state) ? TIOCM_CTS : 0) |
-		((portdata->dsr_state) ? TIOCM_DSR : 0) |
-		((portdata->dcd_state) ? TIOCM_CAR : 0) |
-		((portdata->ri_state) ? TIOCM_RNG : 0);
-
-	return value;
-}
-
-static int option_tiocmset(struct tty_struct *tty, struct file *file,
-			unsigned int set, unsigned int clear)
-{
-	struct usb_serial_port *port = tty->driver_data;
-	struct option_port_private *portdata;
-
-	portdata = usb_get_serial_port_data(port);
-
-	/* FIXME: what locks portdata fields ? */
-	if (set & TIOCM_RTS)
-		portdata->rts_state = 1;
-	if (set & TIOCM_DTR)
-		portdata->dtr_state = 1;
-
-	if (clear & TIOCM_RTS)
-		portdata->rts_state = 0;
-	if (clear & TIOCM_DTR)
-		portdata->dtr_state = 0;
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	return option_send_setup(tty, port);
-#else
-	return option_send_setup(port);
-#endif
-}
-
-/* Write */
-static int option_write(struct tty_struct *tty, struct usb_serial_port *port,
-			const unsigned char *buf, int count)
-{
-	struct option_port_private *portdata;
-	struct option_intf_private *intfdata;
-	int i;
-	int left, todo;
-	struct urb *this_urb = NULL; /* spurious */
-	int err;
-	unsigned long flags;
-	int failed_to_usb_autopm_get_interface_async = 0;
-
-	portdata = usb_get_serial_port_data(port);
-	intfdata = port->serial->private;
-
-	dbg("%s: write (%d chars)", __func__, count);
-
-#ifdef CONFIG_DEBUG_ASUS
-	if (logActivate > 0) {
-		printk(KERN_INFO"%s()+ write %d chars to ttyUSB%d\n", __func__, count, port->number);
-	}
-#endif
-
-	i = 0;
-	left = count;
-	for (i = 0; left > 0 && i < N_OUT_URB; i++) {
-		todo = left;
-		if (todo > OUT_BUFLEN)
-			todo = OUT_BUFLEN;
-
-		this_urb = portdata->out_urbs[i];
-		if (test_and_set_bit(i, &portdata->out_busy)) {
-			if (time_before(jiffies,
-					portdata->tx_start_time[i] + 10 * HZ))
-				continue;
-			usb_unlink_urb(this_urb);
-			continue;
-		}
-		dbg("%s: endpoint %d buf %d", __func__,
-			usb_pipeendpoint(this_urb->pipe), i);
-
-		err = usb_autopm_get_interface_async(port->serial->interface);
-		if (err < 0) {
-#ifdef CONFIG_DEBUG_ASUS
-			if (logActivate > 0) {
-				printk(KERN_INFO"%s(): Failed to run usb_autopm_get_interface_async(), err = %d\n", __func__, err);
-			}
-#endif
-			failed_to_usb_autopm_get_interface_async = 1;
-			break;
-		}
-
-		/* send the data */
-		memcpy(this_urb->transfer_buffer, buf, todo);
-		this_urb->transfer_buffer_length = todo;
-
-		spin_lock_irqsave(&intfdata->susp_lock, flags);
-		if (intfdata->suspended) {
-#ifdef CONFIG_DEBUG_ASUS
-			if (logActivate > 0) {
-				printk(KERN_INFO"%s(): The device is still suspended.\n", __func__);
-			}
-#endif
-			usb_anchor_urb(this_urb, &portdata->delayed);
-			spin_unlock_irqrestore(&intfdata->susp_lock, flags);
-		} else {
-			intfdata->in_flight++;
-			spin_unlock_irqrestore(&intfdata->susp_lock, flags);
-			err = usb_submit_urb(this_urb, GFP_ATOMIC);
-			if (err) {
-#ifdef CONFIG_DEBUG_ASUS
-				if (logActivate > 0) {
-					printk(KERN_INFO"%s(): usb_submit_urb %p (write bulk) failed (%d)",__func__, this_urb, err);
-
-				}
-#endif
-				clear_bit(i, &portdata->out_busy);
-				spin_lock_irqsave(&intfdata->susp_lock, flags);
-				intfdata->in_flight--;
-				spin_unlock_irqrestore(&intfdata->susp_lock, flags);
-				continue;
-			}
-		}
-
-		portdata->tx_start_time[i] = jiffies;
-		buf += todo;
-		left -= todo;
-	}
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
-		usb_autopm_put_interface_async(port->serial->interface);
-	#endif
-	/*End: Added for selective suspend by fangxiaozhi*/
-	
-	count -= left;
-	dbg("%s: wrote (did %d)", __func__, count);
-
-#ifdef CONFIG_DEBUG_ASUS
-	if (logActivate > 0) {
-		printk(KERN_INFO"%s()- wrote %d chars to ttyUSB%d\n", __func__, count, port->number);
-	}
-#endif
-
-	if (count == 0 && (failed_to_usb_autopm_get_interface_async == 1 ||
-		(port->serial->dev->descriptor.idVendor == HUAWEI_VENDOR_ID &&
-		port->serial->dev->descriptor.idProduct == HUAWEI_PRODUCT_E1404 &&
-		port->serial->interface->cur_altsetting->desc.bInterfaceNumber == 0x2))) // AT command iface
-		return -EAGAIN;
-	else
-		return count;
-}
-
-static void option_indat_callback(struct urb *urb)
-{
-	int err;
-	int endpoint;
-	struct usb_serial_port *port;
-	struct tty_struct *tty;
-	unsigned char *data = urb->transfer_buffer;
-	int status = urb->status;
-
-	dbg("%s: %p", __func__, urb);
-
-	endpoint = usb_pipeendpoint(urb->pipe);
-	port =  urb->context;
-
-	if (status) {
-		dbg("%s: nonzero status: %d on endpoint %02x.",
-		    __func__, status, endpoint);
-	} else {
-		tty = tty_port_tty_get(&port->port);
-		if(tty){
-			if (urb->actual_length) {
-				tty_buffer_request_room(tty, urb->actual_length);
-				tty_insert_flip_string(tty, data, urb->actual_length);
-				tty_flip_buffer_push(tty);
-			} else 
-				dbg("%s: empty read urb received", __func__);
-			tty_kref_put(tty);
-		}
-		/* Resubmit urb so we continue receiving */
-		if (port->port.count && status != -ESHUTDOWN) {
-			err = usb_submit_urb(urb, GFP_ATOMIC);
-			if (err)
-				printk(KERN_ERR "%s: resubmit read urb failed. "
-					"(%d)", __func__, err);
-			else {
-				
-				/*Begin: Added for selective suspend by fangxiaozhi*/	
-				{
-					struct usb_device *udev = interface_to_usbdev(port->serial->interface);
-					usb_mark_last_busy(udev);
-				}
-				/*End: Added for selective suspend by fangxiaozhi*/
-			}
-		}
-
-	}
-	return;
-}
-
-static void option_outdat_callback(struct urb *urb)
-{
-	struct usb_serial_port *port;
-	struct option_port_private *portdata;
-	struct option_intf_private *intfdata;
-	int i;
-
-	dbg("%s", __func__);
-
-	port =  urb->context;
-	intfdata = port->serial->private;
-
-	usb_serial_port_softint(port);
-	//usb_autopm_put_interface_async(port->serial->interface); /*deleted by fangxiaozhi*/
-	portdata = usb_get_serial_port_data(port);
-	spin_lock(&intfdata->susp_lock);
-	intfdata->in_flight--;
-	spin_unlock(&intfdata->susp_lock);
-
-	for (i = 0; i < N_OUT_URB; ++i) {
-		if (portdata->out_urbs[i] == urb) {
-			smp_mb__before_clear_bit();
-			clear_bit(i, &portdata->out_busy);
-			break;
-		}
-	}
-
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	{
-		struct usb_device *udev = interface_to_usbdev(port->serial->interface);
-		usb_mark_last_busy(udev);
-	}
-	/*End: Added for selective suspend by fangxiaozhi*/
-}
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 
 static void option_instat_callback(struct urb *urb)
 {
@@ -1598,12 +1381,7 @@ static void option_instat_callback(struct urb *urb)
 				(struct usb_ctrlrequest *)urb->transfer_buffer;
 
 		if (!req_pkt) {
-/* This is removed out due to the selective suspend support from HUAWEI.
 			dbg("%s: NULL req_pkt", __func__);
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-			dbg("%s: NULL req_pkt\n", __func__);
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 			return;
 		}
 		if ((req_pkt->bRequestType == 0xA1) &&
@@ -1642,292 +1420,28 @@ static void option_instat_callback(struct urb *urb)
 			dbg("%s: resubmit intr urb failed. (%d)",
 				__func__, err);
 	}
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	{
-		struct usb_device *udev = interface_to_usbdev(port->serial->interface);
-		usb_mark_last_busy(udev);
-	}
-	/*End: Added for selective suspend by fangxiaozhi*/
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 }
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-static int option_write_room(struct tty_struct *tty)
-{
-	struct usb_serial_port *port = tty->driver_data;
-	struct option_port_private *portdata;
-	int i;
-	int data_len = 0;
-	struct urb *this_urb;
-
-	portdata = usb_get_serial_port_data(port);
-
-	for (i = 0; i < N_OUT_URB; i++) {
-		this_urb = portdata->out_urbs[i];
-		if (this_urb && !test_bit(i, &portdata->out_busy))
-			data_len += OUT_BUFLEN;
-	}
-
-	dbg("%s: %d", __func__, data_len);
-	return data_len;
-}
-
-static int option_chars_in_buffer(struct tty_struct *tty)
-{
-	struct usb_serial_port *port = tty->driver_data;
-	struct option_port_private *portdata;
-	int i;
-	int data_len = 0;
-	struct urb *this_urb;
-
-	portdata = usb_get_serial_port_data(port);
-
-	for (i = 0; i < N_OUT_URB; i++) {
-		this_urb = portdata->out_urbs[i];
-		/* FIXME: This locking is insufficient as this_urb may
-		   go unused during the test */
-		if (this_urb && test_bit(i, &portdata->out_busy))
-			data_len += this_urb->transfer_buffer_length;
-	}
-	dbg("%s: %d", __func__, data_len);
-	return data_len;
-}
-
-static int option_open(struct tty_struct *tty, struct usb_serial_port *port)
-{
-	struct option_port_private *portdata;
-	struct option_intf_private *intfdata;
-	struct usb_serial *serial = port->serial;
-	int i, err;
-	struct urb *urb;
-
-	portdata = usb_get_serial_port_data(port);
-	intfdata = serial->private; 
-
-	printk("%s()+\n", __func__);
-	dbg("%s", __func__);
-	//printk(KERN_ERR"fxz-%s: called\n", __func__);
-	
-/*Begin : Added for 29kernel selective suspend by lkf*/
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	/* Set some sane defaults */
-	portdata->rts_state = 1;
-	portdata->dtr_state = 1;
-#endif
-/*End  : Added for 29kernel selective suspend by lkf*/
-
-	/* Start reading from the IN endpoint */
-	for (i = 0; i < N_IN_URB; i++) {
-		urb = portdata->in_urbs[i];
-		if (!urb)
-			continue;
-		err = usb_submit_urb(urb, GFP_KERNEL);
-		if (err) {
-			dbg("%s: submit urb %d failed (%d) %d",
-				__func__, i, err,
-				urb->transfer_buffer_length);
-		}
-	}
-
-/*Begin : Added for 29kernel selective suspend by lkf*/
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	if (tty)
-		tty->low_latency = 1;
-	option_send_setup(tty, port);
-#else
-	option_send_setup(port);
-#endif
-/*End  : Added for 29kernel selective suspend by lkf*/
-
-
-	serial->interface->needs_remote_wakeup = 1;
-	spin_lock_irq(&intfdata->susp_lock);
-	portdata->opened = 1;
-	spin_unlock_irq(&intfdata->susp_lock);
-
-	// init the modem wakeup irq handler since the remote wakeup is not supported.
-	init_modem_wakeup_irq_handler(serial);
-
-	printk("%s()-\n", __func__);
-
-	return 0;
-}
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-#else
-static void option_dtr_rts(struct usb_serial_port *port, int on)
-{
-	struct usb_serial *serial = port->serial;
-	struct option_port_private *portdata;
-
-	dbg("%s", __func__);
-	portdata = usb_get_serial_port_data(port);
-	mutex_lock(&serial->disc_mutex);
-	portdata->rts_state = on;
-	portdata->dtr_state = on;
-	if (serial->dev)
-		option_send_setup(port);
-
-	mutex_unlock(&serial->disc_mutex);
-}
-#endif
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-static void option_close(struct tty_struct *tty, struct usb_serial_port *port, struct file *filp)
-#else
-static void option_close(struct usb_serial_port *port)
-#endif
-{
-	int i;
-	struct usb_serial *serial = port->serial;
-	struct option_port_private *portdata;
-	struct option_intf_private *intfdata = port->serial->private;
-
-	printk("%s()+\n", __func__);
-	dbg("%s", __func__);
-	//printk(KERN_ERR"fxz-%s: called\n", __func__);
-	portdata = usb_get_serial_port_data(port);
-
-	/*Begin : Added for 29kernel selective suspend by lkf*/
-	#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	portdata->rts_state = 0;
-	portdata->dtr_state = 0;
-	#endif
-	/*End : Added for 29kernel selective suspend by lkf*/
-	
-	if (serial->dev) {
-	/*Begin : Added for 29kernel selective suspend by lkf*/	
-    #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-		mutex_lock(&serial->disc_mutex);
-		if(!serial->disconnected)
-			option_send_setup(tty, port);
-		mutex_unlock(&serial->disc_mutex);
-    #endif
-	/*End : Added for 29kernel seletive suspend by lkf*/
-
-		/* Stop reading/writing urbs */
-		spin_lock_irq(&intfdata->susp_lock);
-		portdata->opened = 0;
-		spin_unlock_irq(&intfdata->susp_lock);
-
-		for (i = 0; i < N_IN_URB; i++)
-			usb_kill_urb(portdata->in_urbs[i]);
-		for (i = 0; i < N_OUT_URB; i++)
-			usb_kill_urb(portdata->out_urbs[i]);
-		
-		serial->interface->needs_remote_wakeup = 0;
-	}
-
-	// free the modem wakeup irq handler
-	free_modem_wakeup_irq_handler(serial);
-
-	printk("%s()-\n", __func__);
-}
-/* Helper functions used by option_setup_urbs */
-static struct urb *option_setup_urb(struct usb_serial *serial, int endpoint,
-		int dir, void *ctx, char *buf, int len,
-		void (*callback)(struct urb *))
-{
-	struct urb *urb;
-
-	if (endpoint == -1)
-		return NULL;		/* endpoint not needed */
-
-	urb = usb_alloc_urb(0, GFP_KERNEL);		/* No ISO */
-	if (urb == NULL) {
-		dbg("%s: alloc for endpoint %d failed.", __func__, endpoint);
-		return NULL;
-	}
-
-		/* Fill URB using supplied data. */
-	usb_fill_bulk_urb(urb, serial->dev,
-		      usb_sndbulkpipe(serial->dev, endpoint) | dir,
-		      buf, len, callback, ctx);
-
-	return urb;
-}
-
-/* Setup urbs */
-static void option_setup_urbs(struct usb_serial *serial)
-{
-	int i, j;
-	struct usb_serial_port *port;
-	struct option_port_private *portdata;
-
-	dbg("%s", __func__);
-
-	for (i = 0; i < serial->num_ports; i++) {
-		port = serial->port[i];
-		portdata = usb_get_serial_port_data(port);
-
-		/* Do indat endpoints first */
-		for (j = 0; j < N_IN_URB; ++j) {
-			portdata->in_urbs[j] = option_setup_urb(serial,
-					port->bulk_in_endpointAddress,
-					USB_DIR_IN, port,
-					portdata->in_buffer[j],
-					IN_BUFLEN, option_indat_callback);
-		}
-
-		/* outdat endpoints */
-		for (j = 0; j < N_OUT_URB; ++j) {
-			portdata->out_urbs[j] = option_setup_urb(serial,
-					port->bulk_out_endpointAddress,
-					USB_DIR_OUT, port,
-					portdata->out_buffer[j],
-					OUT_BUFLEN, option_outdat_callback);
-		}
-	}
-}
-
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 
 /** send RTS/DTR state to the port.
  *
  * This is exactly the same as SET_CONTROL_LINE_STATE from the PSTN
  * CDC.
 */
-/* This is removed out due to the selective suspend support from HUAWEI.
 static int option_send_setup(struct usb_serial_port *port)
-*/
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-static int option_send_setup(struct tty_struct *tty, struct usb_serial_port *port)
-#else
-static int option_send_setup(struct usb_serial_port *port)
-#endif
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 {
 	struct usb_serial *serial = port->serial;
-/* This is removed out due to the selective suspend support from HUAWEI.
 	struct usb_wwan_intf_private *intfdata =
 		(struct usb_wwan_intf_private *) serial->private;
-*/
 	struct option_port_private *portdata;
 	int ifNum = serial->interface->cur_altsetting->desc.bInterfaceNumber;
 	int val = 0;
 	dbg("%s", __func__);
 
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-	/*Begin : Added for 29kernel selective suspend by lkf*/
-	#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-	if(!tty) {
-		return 0;
-	}
-	#endif
-	/*End : Added for 29kernel selective suspend by lkf*/
-// ------- This is added due to the selective suspend support from HUAWEI. -------
-
-/* This is removed out due to the selective suspend support from HUAWEI.
-	if (is_blacklisted(ifNum,
-			   (struct option_blacklist_info *) intfdata->private)
-	    == OPTION_BLACKLIST_SENDSETUP) {
+	if (is_blacklisted(ifNum, OPTION_BLACKLIST_SENDSETUP,
+			(struct option_blacklist_info *) intfdata->private)) {
 		dbg("No send_setup on blacklisted interface #%d\n", ifNum);
 		return -EIO;
 	}
-*/
 
 	portdata = usb_get_serial_port_data(port);
 
@@ -1940,359 +1454,6 @@ static int option_send_setup(struct usb_serial_port *port)
 		usb_rcvctrlpipe(serial->dev, 0),
 		0x22, 0x21, val, ifNum, NULL, 0, USB_CTRL_SET_TIMEOUT);
 }
-
-// +++++++ This is added due to the selective suspend support from HUAWEI. +++++++
-static int option_startup(struct usb_serial *serial)
-{
-	int i, j, err;
-	struct usb_serial_port *port;
-	struct option_port_private *portdata;
-	u8 *buffer;
-
-	dbg("%s", __func__);
-
-	/* Now setup per port private data */
-	for (i = 0; i < serial->num_ports; i++) {
-		port = serial->port[i];
-		portdata = kzalloc(sizeof(*portdata), GFP_KERNEL);
-		if (!portdata) {
-			dbg("%s: kmalloc for option_port_private (%d) failed!.",
-					__func__, i);
-			return 1;
-		}
-		init_usb_anchor(&portdata->delayed);
-
-		for (j = 0; j < N_IN_URB; j++) {
-			buffer = (u8 *)__get_free_page(GFP_KERNEL);
-			if (!buffer)
-				goto bail_out_error;
-			portdata->in_buffer[j] = buffer;
-		}
-
-		for (j = 0; j < N_OUT_URB; j++) {
-			buffer = kmalloc(OUT_BUFLEN, GFP_KERNEL);
-			if (!buffer)
-				goto bail_out_error2;
-			portdata->out_buffer[j] = buffer;
-		}
-
-		usb_set_serial_port_data(port, portdata);
-
-		if (!port->interrupt_in_urb)
-			continue;
-		err = usb_submit_urb(port->interrupt_in_urb, GFP_KERNEL);
-		if (err)
-			dbg("%s: submit irq_in urb failed %d",
-				__func__, err);
-	}
-	option_setup_urbs(serial);
-	return 0;
-
-bail_out_error2:
-	for (j = 0; j < N_OUT_URB; j++)
-		kfree(portdata->out_buffer[j]);
-bail_out_error:
-	for (j = 0; j < N_IN_URB; j++)
-		if (portdata->in_buffer[j])
-			free_page((unsigned long)portdata->in_buffer[j]);
-	kfree(portdata);
-	return 1;
-}
-
-static void stop_read_write_urbs(struct usb_serial *serial)
-{
-	int i, j;
-	struct usb_serial_port *port;
-	struct option_port_private *portdata;
-
-	/* Stop reading/writing urbs */
-	for (i = 0; i < serial->num_ports; ++i) {
-		port = serial->port[i];
-		portdata = usb_get_serial_port_data(port);
-		for (j = 0; j < N_IN_URB; j++)
-			usb_kill_urb(portdata->in_urbs[j]);
-		for (j = 0; j < N_OUT_URB; j++)
-			usb_kill_urb(portdata->out_urbs[j]);
-	}
-}
-
-static void option_disconnect(struct usb_serial *serial)
-{
-	dbg("%s", __func__);
-
-	stop_read_write_urbs(serial);
-
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	if(hw_udev && hw_udev == serial->dev) {
-		if (hw_suspend_wq) {
-			cancel_delayed_work_sync(hw_suspend_wq); 
-		}
-		hw_udev = NULL;
-    }
-	/*End: Added for selective suspend by fangxiaozhi*/
-}
-
-static void option_release(struct usb_serial *serial)
-{
-	int i, j;
-	struct usb_serial_port *port;
-	struct option_port_private *portdata;
-
-	dbg("%s", __func__);
-
-	/* Now free them */
-	for (i = 0; i < serial->num_ports; ++i) {
-		port = serial->port[i];
-		portdata = usb_get_serial_port_data(port);
-
-		for (j = 0; j < N_IN_URB; j++) {
-			if (portdata->in_urbs[j]) {
-				usb_free_urb(portdata->in_urbs[j]);
-				free_page((unsigned long)
-					portdata->in_buffer[j]);
-				portdata->in_urbs[j] = NULL;
-			}
-		}
-		for (j = 0; j < N_OUT_URB; j++) {
-			if (portdata->out_urbs[j]) {
-				usb_free_urb(portdata->out_urbs[j]);
-				kfree(portdata->out_buffer[j]);
-				portdata->out_urbs[j] = NULL;
-			}
-		}
-	}
-
-	/* Now free per port private data */
-	for (i = 0; i < serial->num_ports; i++) {
-		port = serial->port[i];
-		kfree(usb_get_serial_port_data(port));
-	}
-
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	if (hw_suspend_wq) {
-		cancel_delayed_work_sync(hw_suspend_wq); 
-		kfree(hw_suspend_wq);  
-		hw_suspend_wq = NULL;
-	}
-	/*End: Added for selective suspend by fangxiaozhi*/
-}
-
-#ifdef CONFIG_PM
-static int option_suspend(struct usb_serial *serial, pm_message_t message)
-{
-	struct option_intf_private *intfdata = serial->private;
-	
-	printk(KERN_ERR"fxz-%s entered\n", __func__);
-	
-
-	spin_lock_irq(&intfdata->susp_lock);
-	intfdata->suspended = 1;
-	spin_unlock_irq(&intfdata->susp_lock);
-	stop_read_write_urbs(serial);
-
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	if (hw_udev && hw_udev == serial->dev && hw_suspend_wq) {
-		cancel_delayed_work(hw_suspend_wq);
-	}
-	if (hw_udev) {
-		hw_udev->do_remote_wakeup = 1;
-	}
-	/*End: Added for selective suspend by fangxiaozhi*/
-	return 0;
-}
-
-static void play_delayed(struct usb_serial_port *port)
-{
-	struct option_intf_private *data;
-	struct option_port_private *portdata;
-	struct urb *urb;
-	int err;
-
-	portdata = usb_get_serial_port_data(port);
-	data = port->serial->private;
-	while ((urb = usb_get_from_anchor(&portdata->delayed))) {
-		err = usb_submit_urb(urb, GFP_ATOMIC);
-		if (!err)
-			data->in_flight++;
-	}
-}
-
-static int option_resume(struct usb_serial *serial)
-{
-	int i, j;
-	struct usb_serial_port *port;
-	struct option_intf_private *intfdata = serial->private;
-	struct option_port_private *portdata;
-	struct urb *urb;
-	int err = 0;
-	
-	printk(KERN_ERR"fxz-%s entered\n", __func__);
-	/* get the interrupt URBs resubmitted unconditionally */
-	for (i = 0; i < serial->num_ports; i++) {
-		port = serial->port[i];
-		if (!port->interrupt_in_urb) {
-			dbg("%s: No interrupt URB for port %d\n", __func__, i);
-			continue;
-		}
-		err = usb_submit_urb(port->interrupt_in_urb, GFP_NOIO);
-		dbg("Submitted interrupt URB for port %d (result %d)", i, err);
-		if (err < 0) {
-			err("%s: Error %d for interrupt URB of port%d",
-				 __func__, err, i);
-			goto err_out;
-		}
-	}
-
-	for (i = 0; i < serial->num_ports; i++) {
-		/* walk all ports */
-		port = serial->port[i];
-		portdata = usb_get_serial_port_data(port);
-
-		/* skip closed ports */
-		spin_lock_irq(&intfdata->susp_lock);
-		if (!portdata->opened) {
-			spin_unlock_irq(&intfdata->susp_lock);
-			continue;
-		}
-
-		for (j = 0; j < N_IN_URB; j++) {
-			urb = portdata->in_urbs[j];
-			err = usb_submit_urb(urb, GFP_ATOMIC);
-			if (err < 0) {
-				err("%s: Error %d for bulk URB %d",
-					 __func__, err, i);
-				spin_unlock_irq(&intfdata->susp_lock);
-				goto err_out;
-			}
-		}
-		play_delayed(port);
-		spin_unlock_irq(&intfdata->susp_lock);
-	}
-	spin_lock_irq(&intfdata->susp_lock);
-	intfdata->suspended = 0;
-	spin_unlock_irq(&intfdata->susp_lock);
-
-	/*Begin: Added for selective suspend by fangxiaozhi*/
-	if (hw_udev && hw_udev == serial->dev && hw_suspend_wq) {
-		schedule_delayed_work(hw_suspend_wq, 1 * HZ);
-	}
-	if (hw_udev) {
-		hw_udev->do_remote_wakeup = 0;
-	}
-	/*End: Added for selective suspend by fangxiaozhi*/
-err_out:
-	return err;
-}
-#endif
-
-/*********************************************************************************/
-/* Interface for selective suspend feature by fangxiaozhi*/
-static void option_suspend_check_work(struct work_struct *work)
-{
-    struct usb_interface    *intf = NULL;
-    //int status = 0;
-    int i = 0; 
-    unsigned long current_time;
-	
-	/*If not Huawei device, do nothing, return*/   
-	if (NULL == hw_udev) {
-		return;
-	}
-	#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,6,35))
-	return;
-	#endif
-	
-	current_time = jiffies;
-	/*If there is no transfer within <autosuspend_delay / HZ> seconds, then ask for suspend*/
-	if (current_time > hw_udev->dev.power.last_busy + hw_udev->dev.power.autosuspend_delay) {
-        	if (hw_udev->actconfig) {
-            		for (; i < hw_udev->actconfig->desc.bNumInterfaces; i++) {
-                		intf = hw_udev->actconfig->interface[i];
-						#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,29))
-                		atomic_set(&intf->pm_usage_cnt, 0);
-						#else
-						intf->pm_usage_cnt = 0;
-						#endif
-            
-						#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
-						usb_autopm_put_interface(intf);
-						#endif
-			}
-        	}
-			#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,32))
-			status = usb_autopm_set_interface(intf);
-        	#endif
-        	schedule_delayed_work(hw_suspend_wq, 2 * HZ);
-		
-    } else {
-        schedule_delayed_work(hw_suspend_wq, 1 * HZ);
-    }
-}
-/***************************************************************************************/
-
-/***************************************************************************************/
-/* Interface for 29 kernel selective suspend feature by lkf*/
-#if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,29))
-static void option_shutdown(struct usb_serial *serial)
-{
-	int i, j;
-	struct usb_serial_port *port;
-	struct option_port_private *portdata;
-
-	dbg("%s", __func__);
-
-	/* Stop reading/writing urbs */
-	for (i = 0; i < serial->num_ports; ++i) {
-		port = serial->port[i];
-		portdata = usb_get_serial_port_data(port);
-		for (j = 0; j < N_IN_URB; j++)
-			usb_kill_urb(portdata->in_urbs[j]);
-		for (j = 0; j < N_OUT_URB; j++)
-			usb_kill_urb(portdata->out_urbs[j]);
-	}
-
-	/*Begin: cancel the selective suspend detect work*/
-	if(hw_udev && hw_udev == serial->dev){
-		if(hw_suspend_wq){
-			cancel_delayed_work_sync(hw_suspend_wq);
-			kfree(hw_suspend_wq);
-			hw_suspend_wq = NULL;
-		}
-		hw_udev = NULL;
-	}
-	/*End: cancel the selective suspend detect work*/
-	/* Now free them */
-	for (i = 0; i < serial->num_ports; ++i) {
-		port = serial->port[i];
-		portdata = usb_get_serial_port_data(port);
-
-		for (j = 0; j < N_IN_URB; j++) {
-			if (portdata->in_urbs[j]) {
-				usb_free_urb(portdata->in_urbs[j]);
-				free_page((unsigned long)
-					portdata->in_buffer[j]);
-				portdata->in_urbs[j] = NULL;
-			}
-		}
-		for (j = 0; j < N_OUT_URB; j++) {
-			if (portdata->out_urbs[j]) {
-				usb_free_urb(portdata->out_urbs[j]);
-				kfree(portdata->out_buffer[j]);
-				portdata->out_urbs[j] = NULL;
-			}
-		}
-	}
-
-	/* Now free per port private data */
-	for (i = 0; i < serial->num_ports; i++) {
-		port = serial->port[i];
-		kfree(usb_get_serial_port_data(port));
-	}
-}
-
-#endif
-/***************************************************************************************/
-// ------- This is added due to the selective suspend support from HUAWEI. -------
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);

@@ -194,7 +194,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	error = syscore_suspend();
 	if (!error) {
-		*wakeup = pm_wakeup_pending();
+//		*wakeup = pm_wakeup_pending();
 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
 			error = suspend_ops->enter(state);
 			events_check_enabled = false;
@@ -319,7 +319,6 @@ int enter_state(suspend_state_t state)
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
 	if (error) {
-		asusec_resume(0);
 		goto Unlock;
 	}
 
@@ -344,7 +343,7 @@ int enter_state(suspend_state_t state)
 //	cpu_up(1);
 	suspend_finish();
  Unlock:
-//	asusec_resume(0);
+	asusec_resume(0);
 	mutex_unlock(&pm_mutex);
 	return error;
 }

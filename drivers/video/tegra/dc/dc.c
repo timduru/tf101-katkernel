@@ -2570,14 +2570,14 @@ static void _tegra_dc_controller_disable(struct tegra_dc *dc)
 	if (dc->ndev->id == 0) {
 		b_dc0_enabled = false;
 
+		if (dc->out_ops && dc->out_ops->disable)
+			dc->out_ops->disable(dc);
+
 		/* HSD: TP8 + TP10 = 210 ms~ */
 		msleep(210);
 		tegra_dc_writel(dc, 0, DC_CMD_INT_MASK);
 		tegra_dc_writel(dc, 0, DC_CMD_INT_ENABLE);
 		disable_irq(dc->irq);
-
-		if (dc->out_ops && dc->out_ops->disable)
-			dc->out_ops->disable(dc);
 
 		gpio_set_value(ventana_lvds_shutdown, 0);
 

@@ -1272,11 +1272,11 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 		if (tegra->default_enable)
 			clk_disable(tegra->clk);
 		//add for usb3 suspend sequence before the asusec driver suspend
-		if (tegra->phy->instance == 2) {
+/*		if (tegra->phy->instance == 2) {
 			printk(KERN_INFO"asusec suspend\n");
 			asusec_suspend_hub_callback();
 		}
-		mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
+*/		mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
 		return 0;
 	}
 
@@ -1287,11 +1287,11 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 	if (tegra->default_enable)
 		clk_disable(tegra->clk);
 	//add for usb3 suspend sequence before the asusec driver suspend
-	if (tegra->phy->instance == 2) {
+/*	if (tegra->phy->instance == 2) {
 		printk(KERN_INFO"asusec suspend\n");
 		asusec_suspend_hub_callback();
 	}
-	mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
+*/	mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
 	return ret;
 }
 #endif
