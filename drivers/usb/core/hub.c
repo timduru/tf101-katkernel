@@ -37,6 +37,10 @@
 #endif
 #endif
 
+
+extern int suspend_process_going;
+extern struct mutex usb_mutex;
+
 struct usb_hub {
 	struct device		*intfdev;	/* the "interface" device */
 	struct usb_device	*hdev;
@@ -2807,6 +2811,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 	char 			*speed, *type;
 	int			devnum = udev->devnum;
 
+	printk("hub_port_init\n");
 	/* root hub ports have a slightly longer reset period
 	 * (from USB 2.0 spec, section 7.1.7.5)
 	 */
@@ -3149,6 +3154,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	struct usb_device *udev;
 	int status, i;
 
+	printk("hub_port_connect_change\n");
 	dev_dbg (hub_dev,
 		"port %d, status %04x, change %04x, %s\n",
 		port1, portstatus, portchange, portspeed(hub, portstatus));
@@ -3320,12 +3326,19 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 		 * been disconnected; we would race with the
 		 * recursively_mark_NOTATTACHED() routine.
 		 */
+		
+/*	if	(suspend_process_going) {
+		printk("abort new usb while suspending\n");
+		status = -ENOTCONN;
+	} else {
+*/		
 		spin_lock_irq(&device_state_lock);
 		if (hdev->state == USB_STATE_NOTATTACHED)
 			status = -ENOTCONN;
 		else
 			hdev->children[port1-1] = udev;
 		spin_unlock_irq(&device_state_lock);
+//	}
 
 		/* Run it through the hoops (find a driver, etc) */
 		if (!status) {
@@ -3388,6 +3401,8 @@ static void hub_events(void)
 	 * safe since we delete the hub from the event list.
 	 * Not the most efficient, but avoids deadlocks.
 	 */
+	printk("hub_events\n");
+	mutex_lock(&usb_mutex);
 	while (1) {
 
 		/* Grab the first entry at the beginning of the list */
@@ -3627,6 +3642,7 @@ static void hub_events(void)
 		kref_put(&hub->kref, hub_release);
 
         } /* end while (1) */
+	mutex_unlock(&usb_mutex);
 }
 
 static int hub_thread(void *__unused)
@@ -3675,6 +3691,7 @@ static struct usb_driver hub_driver = {
 
 int usb_hub_init(void)
 {
+	printk("hub_port_init\n");
 	if (usb_register(&hub_driver) < 0) {
 		printk(KERN_ERR "%s: can't register hub driver\n",
 			usbcore_name);
@@ -3694,6 +3711,7 @@ int usb_hub_init(void)
 
 void usb_hub_cleanup(void)
 {
+	printk("hub_port_cleanup\n");
 	kthread_stop(khubd_task);
 
 	/*

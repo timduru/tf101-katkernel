@@ -27,6 +27,8 @@
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 
+DEFINE_MUTEX(usb_mutex);
+
 /*
  * functions declaration
  */
@@ -1357,8 +1359,8 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 				if (ec_chip->init_success == 0){
 					msleep(400);
 					asusec_reset_dock();
-					msleep(200);
-					asusec_reset_dock();
+//					msleep(200);
+//					asusec_reset_dock();
 					msleep(200);
 					asusec_chip_init(ec_chip->client);
 				} 
@@ -2270,6 +2272,7 @@ int asusec_suspend_hub_callback(void){
 	printk("asusec_suspend_hub_callback+\n");
 	ASUSEC_NOTICE("suspend\n");
 	if (ec_chip->dock_in){
+		mutex_lock(&usb_mutex);
 		ret_val = asusec_i2c_test(ec_chip->client);
 /*		if(ret_val < 0){
 			asusec_reset_dock();
@@ -2292,6 +2295,7 @@ int asusec_suspend_hub_callback(void){
 			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0x7F;
 		}
 		asusec_dockram_write_data(0x0A,9);	
+		mutex_unlock(&usb_mutex);
 	}
 	
 fail_to_access_ec:		

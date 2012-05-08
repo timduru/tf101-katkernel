@@ -273,9 +273,6 @@ static void suspend_backoff(void)
 			  msecs_to_jiffies(SUSPEND_BACKOFF_INTERVAL));
 }
 int suspend_process_going=0;
-//int first_suspend=0;
-extern void auto_dump_kernel_log(void);
-extern void clean_iram_log(char *string);
 static void suspend(struct work_struct *work)
 {
 	int ret;
@@ -297,7 +294,6 @@ static void suspend(struct work_struct *work)
 	getnstimeofday(&ts_entry);
 	suspend_process_going=1;
 //	first_suspend=1;
-	auto_dump_kernel_log();
 /*	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
 		asusec_suspend_hub_callback();
 //		msleep(6000);	
@@ -309,7 +305,6 @@ static void suspend(struct work_struct *work)
 	printk("call pm_suspend-\n");	
 	enable_irq(gpio_to_irq(TEGRA_GPIO_PX5));
 	suspend_process_going=0;	
-	clean_iram_log("exit suspend");
 //	cpu_up(1);
 	getnstimeofday(&ts_exit);
 

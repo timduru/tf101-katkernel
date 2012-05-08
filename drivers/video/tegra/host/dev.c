@@ -744,6 +744,7 @@ static void power_on_host(struct nvhost_module *mod)
 	struct nvhost_master *dev =
 			container_of(mod, struct nvhost_master, mod);
 
+//	nvhost_intr_start(&dev->intr, clk_get_rate(mod->clk[0]));
 	nvhost_syncpt_reset(&dev->syncpt);
 	nvhost_intr_start(&dev->intr, clk_get_rate(mod->clk[0]));
 

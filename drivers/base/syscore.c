@@ -37,7 +37,7 @@ void unregister_syscore_ops(struct syscore_ops *ops)
 	mutex_unlock(&syscore_ops_lock);
 }
 EXPORT_SYMBOL_GPL(unregister_syscore_ops);
-extern void auto_dump_kernel_log(void);
+
 #ifdef CONFIG_PM_SLEEP
 /**
  * syscore_suspend - Execute all the registered system core suspend callbacks.
@@ -103,7 +103,6 @@ void syscore_resume(void)
 			WARN_ONCE(!irqs_disabled(),
 				"Interrupts enabled after %pF\n", ops->resume);
 		}
-	auto_dump_kernel_log();
 }
 EXPORT_SYMBOL_GPL(syscore_resume);
 #endif /* CONFIG_PM_SLEEP */

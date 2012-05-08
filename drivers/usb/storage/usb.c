@@ -823,9 +823,8 @@ static void release_everything(struct us_data *us)
 	scsi_host_put(us_to_host(us));
 }
 
-extern int suspend_process_going;
-extern int display_on;
-//extern int first_suspend;
+//extern int suspend_process_going;
+//extern int display_on;
 /* Thread to carry out delayed SCSI-device scanning */
 static int usb_stor_scan_thread(void * __us)
 {
@@ -854,10 +853,11 @@ static int usb_stor_scan_thread(void * __us)
 				delay_use * HZ);
 	}
 	
-	if	(suspend_process_going) {
+/*	if	(suspend_process_going) {
 		printk("suspending, abort scanning\n");
 		goto end;
 	}
+*/	
 /*	if	(!display_on) {
 		printk("Display off, delay scanning\n");
 		wait_event_interruptible_timeout(us->delay_wait,

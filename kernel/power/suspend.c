@@ -102,41 +102,24 @@ static int suspend_prepare(void)
 
 	if (!suspend_ops || !suspend_ops->enter)
 		return -EPERM;
-//	printk("suspend_prepare\n");
-//	printk("pm_prepare_console\n");
-//	sys_sync();
 	pm_prepare_console();
 
-//	printk("pm_notifier_call_chain\n");
-//	sys_sync();
 	error = pm_notifier_call_chain(PM_SUSPEND_PREPARE);
 	if (error)
 		goto Finish;
 
-//	printk("usermodehelper_disable\n");
-//	sys_sync();
 	error = usermodehelper_disable();
 	if (error)
 		goto Finish;
 
-//	printk("suspend_freeze_processes\n");
-//	sys_sync();
 	error = suspend_freeze_processes();
 	if (!error)
 		return 0;
 
-//	printk("suspend_thaw_processes\n");
-//	sys_sync();
 	suspend_thaw_processes();
-//	printk("usermodehelper_enable\n");
-//	sys_sync();
 	usermodehelper_enable();
  Finish:
-//	printk("pm_notifier_call_chain\n");
-//	sys_sync();
 	pm_notifier_call_chain(PM_POST_SUSPEND);
-//	printk("pm_restore_console\n");
-//	sys_sync();
 	pm_restore_console();
 	return error;
 }
@@ -194,7 +177,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	error = syscore_suspend();
 	if (!error) {
-//		*wakeup = pm_wakeup_pending();
+		*wakeup = pm_wakeup_pending();
 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
 			error = suspend_ops->enter(state);
 			events_check_enabled = false;
@@ -313,12 +296,13 @@ int enter_state(suspend_state_t state)
 
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
 		asusec_suspend_hub_callback();
-//		msleep(6000);	
+		msleep(1000);	
 //		cpu_down(1);
 	}
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
 	if (error) {
+		asusec_resume(0);
 		goto Unlock;
 	}
 
@@ -326,24 +310,15 @@ int enter_state(suspend_state_t state)
 		goto Finish;
 
 	pr_debug("PM: Entering %s sleep\n", pm_states[state]);
-//	printk("pm_restrict_gfp_mask\n");
-//	sys_sync();
 	pm_restrict_gfp_mask();
-//	printk("suspend_devices_and_enter\n");
-//	sys_sync();
 	error = suspend_devices_and_enter(state);
-//	printk("pm_restore_gfp_mask\n");
-//	sys_sync();
 	pm_restore_gfp_mask();
 
  Finish:
 	pr_debug("PM: Finishing wakeup.\n");
-//	printk("suspend_finish\n");
-//	sys_sync();
-//	cpu_up(1);
 	suspend_finish();
  Unlock:
-	asusec_resume(0);
+//	asusec_resume(0);
 	mutex_unlock(&pm_mutex);
 	return error;
 }
