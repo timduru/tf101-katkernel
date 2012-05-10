@@ -2272,15 +2272,18 @@ int asusec_suspend_hub_callback(void){
 	printk("asusec_suspend_hub_callback+\n");
 	ASUSEC_NOTICE("suspend\n");
 	if (ec_chip->dock_in){
-		mutex_lock(&usb_mutex);
+//		printk("mutex+\n");
+//		mutex_lock(&usb_mutex);
 		ret_val = asusec_i2c_test(ec_chip->client);
-/*		if(ret_val < 0){
+		if(ret_val < 0){
 			asusec_reset_dock();
 			msleep(500);
 			ret_val = asusec_i2c_test(ec_chip->client);
 		}
-*/		if(ret_val < 0){
+		if(ret_val < 0){
 			printk("fail to access ec\n");
+//			printk("mutex-\n");
+//			mutex_unlock(&usb_mutex);
 			goto fail_to_access_ec;
 		}
 		
@@ -2295,7 +2298,8 @@ int asusec_suspend_hub_callback(void){
 			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0x7F;
 		}
 		asusec_dockram_write_data(0x0A,9);	
-		mutex_unlock(&usb_mutex);
+//		printk("mutex-\n");
+//		mutex_unlock(&usb_mutex);
 	}
 	
 fail_to_access_ec:		

@@ -364,8 +364,7 @@ static int power_suspend_late(struct device *dev)
 #endif
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("power_suspend_late return %d\n", ret);
-//	return ret;
-	return 0;
+	return ret;
 }
 
 static struct dev_pm_ops power_driver_pm_ops = {

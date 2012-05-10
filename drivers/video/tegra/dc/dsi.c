@@ -456,13 +456,6 @@ static void tegra_dsi_init_sw(struct tegra_dc *dc,
 
 	/* Calculate minimum required pixel rate. */
 	pixel_clk_hz = h_width_pixels * v_width_lines * dsi->info.refresh_rate;
-/*	if (dc->out->flags & TEGRA_DC_OUT_ONE_SHOT_MODE) {
-		if (60 >= dsi->info.refresh_rate)
-			dev_info(&dc->ndev->dev, "DSI: measured refresh rate "
-				"should be larger than rated refresh rate.\n");
-		dc->mode.rated_pclk = h_width_pixels * v_width_lines * 60;
-	}
-*/
 	dc->pixel_clk = pixel_clk_hz;
 
 	/* Calculate minimum byte rate on DSI interface. */
@@ -1126,9 +1119,6 @@ static void tegra_dsi_pad_calibration(struct tegra_dc_dsi_data *dsi)
 
 	val = PAD_DRIV_DN_REF(0x5) | PAD_DRIV_UP_REF(0x7);
 	tegra_vi_csi_writel(val, CSI_MIPIBIAS_PAD_CONFIG);
-
-	val = PAD_CIL_PDVREG(0x0);
-	tegra_vi_csi_writel(val, CSI_CIL_PAD_CONFIG);
 }
 
 static int tegra_dsi_init_hw(struct tegra_dc *dc,
@@ -1324,7 +1314,7 @@ static bool tegra_dsi_host_busy(struct tegra_dc_dsi_data *dsi)
 		goto fail;
 	}
 fail:
-	return (err < 0 ? true : false);
+	return err;
 
 }
 
@@ -1442,12 +1432,9 @@ static struct dsi_status *tegra_dsi_prepare_host_transmission(
 	}
 
 	if (tegra_dsi_host_busy(dsi)) {
-		tegra_dsi_soft_reset(dsi);
-		if (tegra_dsi_host_busy(dsi)) {
-			err = -EBUSY;
-			dev_err(&dc->ndev->dev, "DSI host busy\n");
-			goto fail;
-		}
+		err = -EBUSY;
+		dev_err(&dc->ndev->dev, "DSI host busy\n");
+		goto fail;
 	}
 
 	tegra_dsi_reset_underflow_overflow(dsi);
@@ -2611,11 +2598,11 @@ static void tegra_dc_dsi_suspend(struct tegra_dc *dc)
 
 	dsi = tegra_dc_get_outdata(dc);
 
-	if (!dsi->enabled)
-		goto fail;
-
 	tegra_dc_io_start(dc);
 	mutex_lock(&dsi->lock);
+
+	if (!dsi->enabled)
+		goto fail;
 
 	if (!dsi->info.power_saving_suspend) {
 		if (dsi->ulpm) {

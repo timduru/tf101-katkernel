@@ -3401,7 +3401,7 @@ static void hub_events(void)
 	 * safe since we delete the hub from the event list.
 	 * Not the most efficient, but avoids deadlocks.
 	 */
-	printk("hub_events\n");
+	printk("hub_events+\n");
 	mutex_lock(&usb_mutex);
 	while (1) {
 
@@ -3642,6 +3642,7 @@ static void hub_events(void)
 		kref_put(&hub->kref, hub_release);
 
         } /* end while (1) */
+	printk("hub_events-\n");
 	mutex_unlock(&usb_mutex);
 }
 

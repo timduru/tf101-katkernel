@@ -42,7 +42,6 @@
 #include <asm/uaccess.h>
 
 #include "queue.h"
-#include "../debug_mmc.h"
 
 MODULE_ALIAS("mmc:block");
 #ifdef MODULE_PARAM_PREFIX
@@ -815,8 +814,6 @@ static void mmc_blk_remove(struct mmc_card *card)
 	mmc_set_drvdata(card, NULL);
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	mmc_set_bus_resume_policy(card->host, 0);
-//	card->host->bus_resume_flags &= ~MMC_BUSRESUME_NEEDS_RESUME;
-//	MMC_printk("%s: bus_resume_flags 0x%x", mmc_hostname(card->host), card->host->bus_resume_flags);
 #endif
 }
 

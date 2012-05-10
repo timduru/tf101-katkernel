@@ -679,12 +679,19 @@ static int bq20z45_get_capacity(union power_supply_propval *val)
 	printk("bq20z45_get_capacity val->intval=%u ret=%u\n",val->intval,ret,bq20z45_device->low_battery_present?"low battery event":" ");
 	return 0;
 }
+extern int suspend_process_going;
+
 static int bq20z45_get_property(struct power_supply *psy,
 	enum power_supply_property psp,
 	union power_supply_propval *val)
 {
 	u8 count;
-
+	
+	if	(suspend_process_going) {
+		printk("no battery data while suspending\n");
+		return -EINVAL;
+	}
+		
 	switch (psp) {
 		case POWER_SUPPLY_PROP_PRESENT:
 		case POWER_SUPPLY_PROP_HEALTH:

@@ -280,9 +280,12 @@ static void suspend_finish(void)
  *	Then, do the setup for suspend, enter the state, and cleaup (after
  *	we've woken up).
  */
+extern struct mutex usb_mutex;
+
 int enter_state(suspend_state_t state)
 {
 	int error;
+	int dock=0;
 	
 	if (!valid_state(state))
 		return -ENODEV;
@@ -295,14 +298,22 @@ int enter_state(suspend_state_t state)
 	printk("done.\n");
 
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
+		dock=1;
+		printk("mutex+\n");
+		mutex_lock(&usb_mutex);
+
 		asusec_suspend_hub_callback();
-		msleep(1000);	
+		printk("mutex-\n");
+		mutex_unlock(&usb_mutex);
+		msleep(2000);	
 //		cpu_down(1);
 	}
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
 	if (error) {
-		asusec_resume(0);
+		if (dock==1) {
+			asusec_resume(0);
+		}
 		goto Unlock;
 	}
 
