@@ -29,6 +29,8 @@ MODULE_LICENSE("GPL");
 
 DEFINE_MUTEX(usb_mutex);
 
+int hub_suspended;
+
 /*
  * functions declaration
  */
@@ -526,11 +528,13 @@ static int asusec_i2c_test(struct i2c_client *client){
 }
 
 static void asusec_reset_dock(void){
+	printk("asusec_reset_dock+\n");
 	ec_chip->dock_init = 0;
 	ASUSEC_NOTICE("send EC_Request\n");	
 	gpio_set_value(TEGRA_GPIO_PS3, 0);
 	msleep(CONVERSION_TIME_MS);
 	gpio_set_value(TEGRA_GPIO_PS3, 1);		
+	printk("asusec_reset_dock-\n");	
 }
 static int asusec_is_init_running(void){
 	int ret_val;
@@ -553,6 +557,8 @@ static int asusec_chip_init(struct i2c_client *client)
 	int ret_val = 0;
 	int i;
 
+	printk("asusec_chip_init+\n");
+	
 	if(asusec_is_init_running()){
 		return 0;
 	}	
@@ -645,6 +651,7 @@ static int asusec_chip_init(struct i2c_client *client)
 
 	ec_chip->status = 1;
 	wake_unlock(&ec_chip->wake_lock);
+	printk("asusec_chip_init-\n");
 	return 0;
 
 fail_to_access_ec:
@@ -657,6 +664,7 @@ fail_to_access_ec:
 	}
 	enable_irq(client->irq);
 	wake_unlock(&ec_chip->wake_lock);
+	printk("asusec_chip_init-\n");
 	return -1;
 
 }
@@ -666,6 +674,7 @@ static irqreturn_t asusec_interrupt_handler(int irq, void *dev_id){
 
 	int gpio = irq_to_gpio(irq);
 
+//	printk("asusec_interrupt_handler+\n");
 	if (gpio == TEGRA_GPIO_PS2){
 		disable_irq_nosync(irq);
 		if (ec_chip->op_mode){
@@ -685,6 +694,7 @@ static irqreturn_t asusec_interrupt_handler(int irq, void *dev_id){
 		ec_chip->dock_det++;
 		queue_delayed_work(asusec_wq, &ec_chip->asusec_dock_init_work, 0);
 	}
+//	printk("asusec_interrupt_handler-\n");
 	return IRQ_HANDLED;	
 }
 
@@ -726,7 +736,6 @@ static int asusec_irq_dock_in(struct i2c_client *client)
 		ASUSEC_NOTICE("Dock detected\n");
 		ec_chip->dock_in = 1;
 	}
-
 	return 0 ;
 
 err_gpio_request_irq_fail :	
@@ -1054,7 +1063,6 @@ static void asusec_reset_counter(unsigned long data){
 static int asusec_tp_control(int arg){
 
 	int ret_val = 0;	
-	
 	if(arg == ASUSEC_TP_ON){
 		if (ec_chip->tp_enable == 0){
 			ec_chip->tp_wait_ack = 1;
@@ -1313,7 +1321,6 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 	int d_counter = 0;
 	int gpio_state = 0;
 	ASUSEC_INFO("Dock-init function\n");
-
 	wake_lock(&ec_chip->wake_lock_init);
 	if (ASUSGetProjectID()==101){
 		ASUSEC_NOTICE("EP101 dock-init\n");
@@ -1341,6 +1348,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 		mutex_lock(&ec_chip->input_lock);
 		if (gpio_get_value(gpio)){
 			ASUSEC_NOTICE("No dock detected\n");
+//			hub_suspended=1;
 			ec_chip->dock_in = 0;
 			ec_chip->init_success = 0;
 			ec_chip->tp_enable = 1;
@@ -1367,6 +1375,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 			} else {
 				ASUSEC_NOTICE("Keyboard is closed\n");
 			}
+//			hub_suspended=0;
 		}
 		switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in ? 10 : 0);
 		mutex_unlock(&ec_chip->input_lock);
@@ -1384,6 +1393,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 		} else {
 			ASUSEC_NOTICE("Keyboard is closed\n");
 		}
+//		hub_suspended=0;
 	}
 	wake_unlock(&ec_chip->wake_lock_init);
 }
@@ -1409,7 +1419,6 @@ static void asusec_work_function(struct work_struct *dat)
 	int irq = gpio_to_irq(gpio);
 	int ret_val = 0;
 
-//	printk("asusec_work_function+\n");
 	if (ec_chip->wakeup_lcd){
 		printk("wakeup_lcd\n");
 		if (gpio_get_value(TEGRA_GPIO_PS4)){
@@ -1456,7 +1465,6 @@ static void asusec_work_function(struct work_struct *dat)
 #if (!ASUSEC_INTERRUPT_DRIVEN)
 	queue_delayed_work(asusec_wq, &ec_chip->asusec_work, HZ/ASUSEC_POLLING_RATE);
 #endif
-//	printk("asusec_work_function-\n");
 }
 
 static void asusec_keypad_set_input_params(struct input_dev *dev)
@@ -1538,7 +1546,6 @@ static int __devinit asusec_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	int err = 0;
-
 	ASUSEC_INFO("asusec probe\n");
 	err = sysfs_create_group(&client->dev.kobj, &asusec_smbus_group);
 	if (err) {
@@ -1850,7 +1857,7 @@ int asusec_resume(struct i2c_client *client){
 		wake_lock(&ec_chip->wake_lock_init);
 		queue_delayed_work(asusec_wq, &ec_chip->asusec_dock_init_work, 0);
 	}
-
+exit:
 	printk("asusec_resume-\n");
 	return 0;	
 }
@@ -1909,6 +1916,7 @@ static long asusec_ioctl(struct file *flip,
 	int env_offset = 0;
 	int length = 0;
 
+						
 	if (_IOC_TYPE(cmd) != ASUSEC_IOC_MAGIC)
 	 return -ENOTTY;
 	if (_IOC_NR(cmd) > ASUSEC_IOC_MAXNR)
@@ -2209,6 +2217,7 @@ error:
 }
 
 int asusec_dock_resume(void){
+	printk("asusec_dock_resume\n");
 	ASUSEC_NOTICE("keyboard opened, op_mode = %d\n", ec_chip->op_mode);
 	if (ec_chip->op_mode == 0){
 		ASUSEC_NOTICE("keyboard opened\n");
@@ -2271,12 +2280,15 @@ int asusec_suspend_hub_callback(void){
 
 	printk("asusec_suspend_hub_callback+\n");
 	ASUSEC_NOTICE("suspend\n");
+	hub_suspended=0;
 	if (ec_chip->dock_in){
 //		printk("mutex+\n");
 //		mutex_lock(&usb_mutex);
 		ret_val = asusec_i2c_test(ec_chip->client);
 		if(ret_val < 0){
-			asusec_reset_dock();
+			//asusec_dock_init_work_function(1);
+			//asusec_resume(1);
+			//asusec_reset_dock();
 			msleep(500);
 			ret_val = asusec_i2c_test(ec_chip->client);
 		}
@@ -2298,6 +2310,7 @@ int asusec_suspend_hub_callback(void){
 			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0x7F;
 		}
 		asusec_dockram_write_data(0x0A,9);	
+		hub_suspended=1;
 //		printk("mutex-\n");
 //		mutex_unlock(&usb_mutex);
 	}

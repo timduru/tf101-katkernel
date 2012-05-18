@@ -273,7 +273,10 @@ static void tegra_fb_flip_win(struct tegra_fb_info *tegra_fb)
 	tegra_dc_sync_windows(&tegra_fb->win, 1);
 }
 #endif
-int display_on=0;
+int display_on=1;
+//extern int asusec_resume(int);
+//extern int hub_suspended;
+
 static int tegra_fb_blank(int blank, struct fb_info *info)
 {
 	struct tegra_fb_info *tegra_fb = info->par;
@@ -284,6 +287,11 @@ static int tegra_fb_blank(int blank, struct fb_info *info)
 		tegra_fb->win->flags = TEGRA_WIN_FLAG_ENABLED;
 		tegra_dc_enable(tegra_fb->win->dc);
 		display_on=1;
+/*		if (hub_suspended) {
+			printk("Restore dock on display on\n");
+			asusec_resume(1);
+		}
+*/	
 #if defined(CONFIG_FRAMEBUFFER_CONSOLE)
 		/*
 		* TODO:

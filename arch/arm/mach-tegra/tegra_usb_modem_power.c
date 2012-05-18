@@ -50,10 +50,10 @@ static struct tegra_usb_modem tegra_mdm;
 /* supported modems */
 static const struct usb_device_id modem_list[] = {
 	{USB_DEVICE(0x1983, 0x0310),	/* Icera 450 rev1 */
-	 .driver_info = 0,
+	 .driver_info = TEGRA_MODEM_AUTOSUSPEND,
 	 },
 	{USB_DEVICE(0x1983, 0x0321),	/* Icera 450 rev2 */
-	 .driver_info = 0,
+	 .driver_info = TEGRA_MODEM_AUTOSUSPEND,
 	 },
 	{}
 };
@@ -96,6 +96,9 @@ static void device_add_handler(struct usb_device *udev)
 	const struct usb_device_id *id = usb_match_id(intf, modem_list);
 
 	if (id) {
+		/* hold wakelock to ensure ril has enough time to restart */
+		wake_lock_timeout(&tegra_mdm.wake_lock, HZ*10);
+
 		pr_info("Add device %d <%s %s>\n", udev->devnum,
 			udev->manufacturer, udev->product);
 
@@ -194,7 +197,7 @@ static int tegra_usb_modem_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&(tegra_mdm.recovery_work), tegra_usb_modem_recovery);
 
 	/* create threaded irq for remote wakeup */
-	if (pdata->wake_gpio) {
+	if (gpio_is_valid(pdata->wake_gpio)) {
 		/* get remote wakeup gpio from platform data */
 		tegra_mdm.wake_gpio = pdata->wake_gpio;
 
@@ -236,7 +239,11 @@ static int tegra_usb_modem_probe(struct platform_device *pdev)
 static int __exit tegra_usb_modem_remove(struct platform_device *pdev)
 {
 	usb_unregister_notify(&usb_nb);
-	free_irq(tegra_mdm.irq, &tegra_mdm);
+
+	if (tegra_mdm.irq) {
+		disable_irq_wake(tegra_mdm.irq);
+		free_irq(tegra_mdm.irq, &tegra_mdm);
+	}
 	return 0;
 }
 

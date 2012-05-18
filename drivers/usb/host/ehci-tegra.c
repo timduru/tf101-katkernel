@@ -565,6 +565,7 @@ static int tegra_usb_resume(struct usb_hcd *hcd, bool is_dpd)
 	bool null_ulpi;
 	bool utmip_remote_wakeup = false;
 
+	printk("tegra_usb_resume+\n");
 	null_ulpi = (tegra->phy->usb_phy_type == TEGRA_USB_PHY_TYPE_NULL_ULPI);
 	hsic = (tegra->phy->usb_phy_type == TEGRA_USB_PHY_TYPE_HSIC);
 
@@ -669,6 +670,7 @@ static int tegra_usb_resume(struct usb_hcd *hcd, bool is_dpd)
 		ehci->command |= CMD_RUN;
 		ehci_writel(ehci, ehci->command, &ehci->regs->command);
 	}
+	printk("tegra_usb_resume-\n");
 	return 0;
 
 restart:
@@ -690,7 +692,8 @@ restart:
 
 		if (LP0)
 			tegra_ehci_phy_restore_end(tegra->phy);
-
+			
+		printk("tegra_usb_resume-\n");
 		return 0;
 	}
 
@@ -710,6 +713,7 @@ restart:
 		tegra_ehci_restart(hcd, false);
 	}
 
+	printk("tegra_usb_resume-\n");
 	return 0;
 }
 #endif
@@ -1229,6 +1233,7 @@ static int tegra_ehci_resume(struct platform_device *pdev)
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
 	int ret;
 
+	printk("tegra_ehci_resume\n");
 	mutex_lock(&tegra->tegra_ehci_hcd_mutex);
 	if ((tegra->bus_suspended) && (tegra->power_down_on_bus_suspend)) {
 		if (tegra->default_enable)
@@ -1252,6 +1257,7 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 	int ret;
 	u32 val;
 
+	printk("tegra_ehci_suspend\n");
 	mutex_lock(&tegra->tegra_ehci_hcd_mutex);
 	/* if bus suspend is failed means there is remote wakeup resume,
 		then abort the PM suspend */
@@ -1301,6 +1307,7 @@ static int tegra_ehci_remove(struct platform_device *pdev)
 	struct tegra_ehci_hcd *tegra = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
 
+	printk("tegra_ehci_remove\n");
 	if (tegra == NULL || hcd == NULL)
 		return -EINVAL;
 	/* make sure controller is on as we will touch its registers */
