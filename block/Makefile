@@ -1,6 +1,7 @@
 #
 # Makefile for the kernel block layer
 #
+EXTRA_CFLAGS=-mstructure-size-boundary=32
 
 obj-$(CONFIG_BLOCK) := elevator.o blk-core.o blk-tag.o blk-sysfs.o \
 			blk-flush.o blk-settings.o blk-ioc.o blk-map.o \

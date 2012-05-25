@@ -1,6 +1,7 @@
 #
 # Makefile for the linux memory manager.
 #
+EXTRA_CFLAGS=-mstructure-size-boundary=32
 
 mmu-y			:= nommu.o
 mmu-$(CONFIG_MMU)	:= fremap.o highmem.o madvise.o memory.o mincore.o \

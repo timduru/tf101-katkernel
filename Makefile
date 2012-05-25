@@ -339,10 +339,12 @@ CHECK		= sparse
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   = -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+#CFLAGS_MODULE   = -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+CFLAGS_MODULE   =  -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+#CFLAGS_KERNEL	= -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+CFLAGS_KERNEL	=  -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 

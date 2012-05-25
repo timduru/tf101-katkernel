@@ -2288,7 +2288,7 @@ int asusec_suspend_hub_callback(void){
 		if(ret_val < 0){
 			//asusec_dock_init_work_function(1);
 			//asusec_resume(1);
-			//asusec_reset_dock();
+			asusec_reset_dock();
 			msleep(500);
 			ret_val = asusec_i2c_test(ec_chip->client);
 		}
@@ -2454,6 +2454,17 @@ static void __exit asusec_exit(void)
 	unregister_chrdev_region(asusec_dev, 1);
 	switch_dev_unregister(&ec_chip->dock_sdev);
 }
+
+
+void reload_asusec()
+{
+	asusec_exit;
+//	msleep(1000);
+	asusec_init;
+}
+EXPORT_SYMBOL(reload_asusec);
+
+
 
 module_init(asusec_init);
 module_exit(asusec_exit);

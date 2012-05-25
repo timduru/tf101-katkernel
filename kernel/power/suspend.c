@@ -33,6 +33,7 @@
 extern int asusec_suspend_hub_callback(void);
 extern int asusec_resume(int);
 extern int hub_suspended;
+extern void reload_asusec();
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
@@ -303,15 +304,19 @@ int enter_state(suspend_state_t state)
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
 		dock=1;
 		hub_suspended=0;
-		printk("mutex+\n");
-		mutex_lock(&usb_mutex);
+//		printk("mutex+\n");
+//		mutex_lock(&usb_mutex);
 		while (!hub_suspended) {
 			asusec_suspend_hub_callback();
 			if (retries-- == 0)
 				break;
+//			if (!hub_suspended && retries==1) {
+//				printk("try to restart asusec\n");
+//				reload_asusec();
+//			}
 		}
-		printk("mutex-\n");
-		mutex_unlock(&usb_mutex);
+//		printk("mutex-\n");
+//		mutex_unlock(&usb_mutex);
 		if (!hub_suspended) {
 			printk("Dock problem\n");
 			if (failed_dock < 3) {

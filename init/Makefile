@@ -1,6 +1,7 @@
 #
 # Makefile for the linux kernel.
 #
+EXTRA_CFLAGS=-mstructure-size-boundary=32
 
 obj-y                          := main.o version.o mounts.o
 ifneq ($(CONFIG_BLK_DEV_INITRD),y)

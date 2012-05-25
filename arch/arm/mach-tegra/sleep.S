@@ -111,14 +111,14 @@ ENDPROC(tegra_pen_unlock)
  * corrupts r0-r3
  * must be called with MMU on
  */
- /*
+ 
 ENTRY(tegra_cpu_wfi)
 	dsb
 	wfi
 	mov	pc, lr
 ENDPROC(tegra_cpu_wfi)
-*/
 
+/*
 ENTRY(tegra_cpu_wfi)
 	cpu_id	r0
 	cpu_to_halt_reg r1, r0
@@ -137,7 +137,7 @@ ENTRY(tegra_cpu_wfi)
 	dsb
 	mov	pc, lr
 ENDPROC(tegra_cpu_wfi)
-
+*/
 /*
  * tegra_cpu_exit_coherency
  *
