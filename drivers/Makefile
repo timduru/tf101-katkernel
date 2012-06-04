@@ -4,7 +4,9 @@
 # 15 Sep 2000, Christoph Hellwig <hch@infradead.org>
 # Rewritten to use lists instead of if-statements.
 #
+ifeq ($(OPTI),2)
 EXTRA_CFLAGS=-mstructure-size-boundary=32
+endif
 
 obj-y				+= gpio/
 obj-$(CONFIG_PCI)		+= pci/

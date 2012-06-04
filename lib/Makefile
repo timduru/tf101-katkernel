@@ -1,8 +1,9 @@
 #
 # Makefile for some libs needed in the kernel.
 #
-
+ifeq ($(OPTI),2)
 EXTRA_CFLAGS=-mstructure-size-boundary=32
+endif
 
 ifdef CONFIG_FUNCTION_TRACER
 ORIG_CFLAGS := $(KBUILD_CFLAGS)

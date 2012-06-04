@@ -69,10 +69,11 @@ struct gpio_keys_drvdata {
 	void (*disable)(struct device *dev);
 	struct gpio_button_data data[0];
 };
+#ifdef CONFIG_ASUSEC
 extern int asusec_open_keyboard(void);
 extern int asusec_close_keyboard(void);
 extern int asusec_dock_resume(void);
-
+#endif
 /*
  * SYSFS interface for enabling/disabling keys and switches:
  *
@@ -356,6 +357,7 @@ static void gpio_keys_report_event(struct gpio_button_data *bdata)
 	GPIOKEYS_INFO("type = %d, code = %d, state = %d\n", type, button->code, state);
 	input_event(input, type, button->code, !!state);
 	input_sync(input);
+#ifdef CONFIG_ASUSEC	
 	if ((type == EV_SW) && (ASUSGetProjectID() == 102)){
 		if (state == 0)
 			asusec_close_keyboard();
@@ -368,6 +370,7 @@ static void gpio_keys_report_event(struct gpio_button_data *bdata)
 				asusec_dock_resume();
 		}
 	}
+#endif	
 }
 
 static void gpio_keys_work_func(struct work_struct *work)

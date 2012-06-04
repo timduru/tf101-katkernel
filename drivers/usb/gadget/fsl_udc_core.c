@@ -89,7 +89,9 @@ static struct fsl_udc *udc_controller = NULL;
 /* Enable or disable the callback for the other driver. */
 #define BATTERY_CALLBACK_ENABLED 1
 #define TOUCH_CALLBACK_ENABLED 0
+#ifdef CONFIG_ASUSEC
 #define DOCK_EC_ENABLED 1
+#endif
 
 static int gpio_limit_set1_irq;
 

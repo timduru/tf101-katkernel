@@ -60,7 +60,9 @@ int reboot_test_tool_installed=0;
 bool check_rvsd_process=0;
 int exit_charging_mode=0;
 EXPORT_SYMBOL(ready_to_polling);
+#ifdef CONFIG_ASUSEC
 extern int asusec_is_battery_full_callback(int full);
+#endif
 extern  int mxt_enable(void);
 extern  int mxt_disable(void);
 enum {
@@ -1142,16 +1144,20 @@ void charge_ic_enable(bool enable)
 		output_high=true;
 		new_state=CHARGER_STATE_DISABLED;
 	}
+#ifdef CONFIG_ASUSEC	
     if ( (enable) && (old_state!=new_state) )
 		asusec_is_battery_full_callback(false);
+#endif	
     // printk("charge_ic_enable  enable=%x battery_cable_status =%u new_state=%x 0ld_state=%x output_high=%s\n",enable,battery_cable_status ,new_state,old_state,output_high?"HIGH":"LOW");
 	//if(old_state!=new_state)
 	{
 		gpio_set_value(GPIOPIN_CHARGER_ENABLE,output_high);
 		old_state=new_state;
 	}
+#ifdef CONFIG_ASUSEC	
     if ( (!enable) && (old_state!=new_state) )
 		asusec_is_battery_full_callback(true);
+#endif
 }
 
 unsigned int  get_charge_ic_state(void )

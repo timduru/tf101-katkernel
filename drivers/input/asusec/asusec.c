@@ -24,6 +24,9 @@
 #include "asusec.h"
 #include "elan_i2c_asus.h"
 
+#include "../../../arch/arm/mach-tegra/gpio-names.h"
+
+
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 
@@ -1377,7 +1380,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 			}
 //			hub_suspended=0;
 		}
-		switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in ? 10 : 0);
+//////		switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in ? 10 : 0);
 		mutex_unlock(&ec_chip->input_lock);
 	}
 	else if (ASUSGetProjectID()==102){
@@ -2274,7 +2277,7 @@ fail_to_access_ec:
 }
 EXPORT_SYMBOL(asusec_close_keyboard);
 
-
+extern int nousb;
 int asusec_suspend_hub_callback(void){
 	int ret_val;
 
@@ -2286,10 +2289,11 @@ int asusec_suspend_hub_callback(void){
 //		mutex_lock(&usb_mutex);
 		ret_val = asusec_i2c_test(ec_chip->client);
 		if(ret_val < 0){
+			printk("retry i2c test\n");
 			//asusec_dock_init_work_function(1);
 			//asusec_resume(1);
-			asusec_reset_dock();
-			msleep(500);
+			////asusec_reset_dock();
+			////msleep(500);
 			ret_val = asusec_i2c_test(ec_chip->client);
 		}
 		if(ret_val < 0){
@@ -2298,7 +2302,11 @@ int asusec_suspend_hub_callback(void){
 //			mutex_unlock(&usb_mutex);
 			goto fail_to_access_ec;
 		}
-		
+		if (nousb==1) {
+			printk("usb wait2\n");
+			msleep(500);
+		}
+
 		asusec_dockram_read_data(0x0A);
 
 		ec_chip->i2c_dm_data[0] = 8;
@@ -2463,6 +2471,64 @@ void reload_asusec()
 	asusec_init;
 }
 EXPORT_SYMBOL(reload_asusec);
+
+void stop_dock()
+{
+	int gpio = TEGRA_GPIO_PX5;
+	int irq = gpio_to_irq(gpio);
+	int i = 0;
+	int d_counter = 0;
+	int gpio_state = 0;
+	
+//	hub_suspended=1;
+	
+	wake_lock(&ec_chip->wake_lock_init);
+	if (ASUSGetProjectID()==101){
+		ASUSEC_NOTICE("EP101 dock-stop\n");
+		if (ec_chip->dock_det){
+			gpio_state = gpio_get_value(gpio);
+			for(i = 0; i < 40; i++){
+				msleep(50);
+				if (gpio_state == gpio_get_value(gpio)){
+					d_counter++;
+				} else {
+					gpio_state = gpio_get_value(gpio);
+					d_counter = 0;
+				}
+				if (d_counter > 4){
+					break;
+				}
+			}
+#if CALLBACK_READY
+			// docking_callback();
+			disable_irq(gpio_to_irq(TEGRA_GPIO_PS1));
+#endif
+			ec_chip->dock_det--;
+			ec_chip->re_init = 0;
+		}
+		
+		mutex_lock(&ec_chip->input_lock);
+//		if (gpio_get_value(gpio)){
+			ASUSEC_NOTICE("stop dock \n");
+//			hub_suspended=1;
+////			ec_chip->dock_in = 0;
+			ec_chip->init_success = 0;
+//			ec_chip->tp_enable = 0;
+			if (ec_chip->indev){
+				input_unregister_device(ec_chip->indev);
+				ec_chip->indev = NULL;
+			}
+			if (ec_chip->private->abs_dev){
+				input_unregister_device(ec_chip->private->abs_dev);
+				ec_chip->private->abs_dev = NULL;
+			}
+//		switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in ? 10 : 0);
+		mutex_unlock(&ec_chip->input_lock);
+	}
+	wake_unlock(&ec_chip->wake_lock_init);
+
+}
+EXPORT_SYMBOL(stop_dock);
 
 
 

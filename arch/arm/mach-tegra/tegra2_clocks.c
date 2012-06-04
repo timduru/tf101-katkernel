@@ -2776,7 +2776,7 @@ static struct tegra_cpufreq_table_data cpufreq_tables[] = {
 	{ freq_table_750MHz, 1, 4 },
 	{ freq_table_1p0GHz, 2, 6 },
 	{ freq_table_1p2GHz, 2, 7 },
-	{ freq_table_1p7GHz, 2, 8 },
+	{ freq_table_1p7GHz, 2, 7, 1 },
 };
 
 struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)

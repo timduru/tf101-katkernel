@@ -83,6 +83,7 @@ struct tegra_dc {
 	struct clk			*emc_clk;
 	int				emc_clk_rate;
 	int				new_emc_clk_rate;
+	u32				shift_clk_div;	
 
 	bool				connected;
 	bool				enabled;
@@ -101,6 +102,7 @@ struct tegra_dc {
 	wait_queue_head_t		wq;
 
 	struct mutex			lock;
+	struct mutex			one_shot_lock;	
 
 	struct resource			*fb_mem;
 	struct tegra_fb_info		*fb;
@@ -138,6 +140,9 @@ struct tegra_dc {
 	struct dentry			*debugdir;
 #endif
 	struct tegra_dc_lut		fb_lut;
+	struct delayed_work		underflow_work;
+	u32				one_shot_delay_ms;
+	struct delayed_work		one_shot_work;
 };
 
 static inline void tegra_dc_io_start(struct tegra_dc *dc)

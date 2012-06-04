@@ -39,7 +39,10 @@
 
 
 extern int suspend_process_going;
+#ifdef CONFIG_ASUSEC
 extern struct mutex usb_mutex;
+extern int nousb;
+#endif
 
 struct usb_hub {
 	struct device		*intfdev;	/* the "interface" device */
@@ -3401,8 +3404,11 @@ static void hub_events(void)
 	 * safe since we delete the hub from the event list.
 	 * Not the most efficient, but avoids deadlocks.
 	 */
+#ifdef CONFIG_ASUSEC
 //	printk("hub_events+\n");
 //	mutex_lock(&usb_mutex);
+	nousb=1;
+#endif	
 	while (1) {
 
 		/* Grab the first entry at the beginning of the list */
@@ -3642,8 +3648,11 @@ static void hub_events(void)
 		kref_put(&hub->kref, hub_release);
 
         } /* end while (1) */
+#ifdef CONFIG_ASUSEC
+	nousb=0;
 //	printk("hub_events-\n");
 //	mutex_unlock(&usb_mutex);
+#endif	
 }
 
 static int hub_thread(void *__unused)

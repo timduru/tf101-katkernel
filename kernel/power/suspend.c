@@ -33,7 +33,8 @@
 extern int asusec_suspend_hub_callback(void);
 extern int asusec_resume(int);
 extern int hub_suspended;
-extern void reload_asusec();
+//extern void reload_asusec();
+extern void stop_dock();
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
@@ -252,6 +253,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 	return error;
 
  Recover_platform:
+	asusec_resume(0);
 	if (suspend_ops->recover)
 		suspend_ops->recover();
 	goto Resume_devices;
@@ -282,8 +284,10 @@ static void suspend_finish(void)
  *	we've woken up).
  */
 extern struct mutex usb_mutex;
+extern int nousb=0;
 
 int failed_dock=0;
+
 
 int enter_state(suspend_state_t state)
 {
@@ -300,37 +304,52 @@ int enter_state(suspend_state_t state)
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
-
+#ifdef CONFIG_ASUSEC
 	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
 		dock=1;
 		hub_suspended=0;
+////		nousb=1;
 //		printk("mutex+\n");
 //		mutex_lock(&usb_mutex);
-		while (!hub_suspended) {
+		if (nousb==1) {
+			printk("usb wait1\n");
+			msleep(500);
+		}
+		asusec_suspend_hub_callback();
+/*		while (!hub_suspended) {
 			asusec_suspend_hub_callback();
 			if (retries-- == 0)
 				break;
-//			if (!hub_suspended && retries==1) {
+			if (!hub_suspended) {
+				stop_dock();
+				msleep(500);
+				asusec_resume(0);
+				msleep(500);
 //				printk("try to restart asusec\n");
 //				reload_asusec();
-//			}
+			}
 		}
+*/		
 //		printk("mutex-\n");
 //		mutex_unlock(&usb_mutex);
 		if (!hub_suspended) {
+			stop_dock();
 			printk("Dock problem\n");
 			if (failed_dock < 3) {
 				printk("aborted suspend\n");
 				failed_dock++;
 				asusec_resume(0);
 				error=999;
+//				nousb=0;
 				goto Unlock;
 			}
 		} 
+//		nousb=0;
 		failed_dock=0;
 		msleep(2000);	
 //		cpu_down(1);
 	}
+#endif
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
 	if (error) {

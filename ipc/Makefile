@@ -1,7 +1,9 @@
 #
 # Makefile for the linux ipc.
 #
+ifeq ($(OPTI),2)
 EXTRA_CFLAGS=-mstructure-size-boundary=32
+endif
 
 obj-$(CONFIG_SYSVIPC_COMPAT) += compat.o
 obj-$(CONFIG_SYSVIPC) += util.o msgutil.o msg.o sem.o shm.o ipcns_notifier.o syscall.o

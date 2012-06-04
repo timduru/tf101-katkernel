@@ -4,6 +4,8 @@ SUBLEVEL = 39
 EXTRAVERSION = .4
 NAME = Flesh-Eating Bats with Fangs
 
+OPTI=2
+
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
 # More info can be located in ./README
@@ -340,11 +342,41 @@ CHECK		= sparse
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
 #CFLAGS_MODULE   = -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
-CFLAGS_MODULE   =  -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+
+##opt
+ifeq ($(OPTI),2)
+CFLAGS_MODULE   =   -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+endif
+
+##normal
+ifeq ($(OPTI),1)
+CFLAGS_MODULE   =    -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize  -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+endif
+
+##default
+ifeq ($(OPTI),0)
+CFLAGS_MODULE   =
+endif
+
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
 #CFLAGS_KERNEL	= -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
-CFLAGS_KERNEL	=  -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+
+##opt
+ifeq ($(OPTI),2)
+CFLAGS_KERNEL	=  -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+endif
+
+##normal
+ifeq ($(OPTI),1)
+CFLAGS_KERNEL	=   -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize  -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+endif
+
+##default
+ifeq ($(OPTI),0)
+CFLAGS_KERNEL	=
+endif
+
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -544,11 +576,18 @@ endif # $(dot-config)
 # Defaults to vmlinux, but the arch makefile usually adds further targets
 all: vmlinux
 
-ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS	+= -O2
+ifeq ($(OPTI),0)
+KBUILD_CFLAGS	+= -Os
 else
 KBUILD_CFLAGS	+= -O2
 endif
+
+#ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
+#KBUILD_CFLAGS	+= -O2
+##KBUILD_CFLAGS	+= -Os
+#else
+#KBUILD_CFLAGS	+= -O2
+#endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
 
