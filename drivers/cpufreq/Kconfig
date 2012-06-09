@@ -109,11 +109,6 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
-config CPU_FREQ_DEFAULT_GOV_SMARTASS2
-	bool "smartass2"
-	select CPU_FREQ_GOV_SMARTASS2
-	help
-	  Use the CPUFreq governor 'smartassV2' as default.
 
 config CPU_FREQ_DEFAULT_GOV_LAGFREE
 	bool "lagfree"
@@ -152,6 +147,20 @@ config CPU_FREQ_DEFAULT_GOV_WHEATLEY
 	select CPU_FREQ_GOV_PERFORMANCE
 	help
 	  Use the CPUFreq governor 'wheatley' as default.
+
+config CPU_FREQ_DEFAULT_GOV_INTELLIDEMAND
+        bool "intellidemand"
+        select CPU_FREQ_GOV_INTELLIDEMAND
+        select CPU_FREQ_GOV_PERFORMANCE
+        help
+         Use the CPUFreq governor 'intellidemand' as default.
+
+config CPU_FREQ_DEFAULT_GOV_LIONHEART
+  bool "lionheart"
+  select CPU_FREQ_GOV_LIONHEART
+  help
+    Use the CPUFreq governor 'lionheart' as default.
+
 
 endchoice
 
@@ -295,6 +304,16 @@ config CPU_FREQ_GOV_LULZACTIVE
 	  'lulzactive' - a new interactive governor by Tegrak!
 
 	  If in doubt, say N.
+	  
+config CPU_FREQ_GOV_INTELLIDEMAND
+        tristate "'intellidemand' cpufreq governor"
+        depends on CPU_FREQ
+        help
+          If in doubt, say N.
+	  
+config CPU_FREQ_GOV_LIONHEART
+  tristate "'lionheart' cpufreq governor"
+  depends on CPU_FREQ
 
 
 menu "x86 CPU frequency scaling drivers"

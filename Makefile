@@ -4,7 +4,7 @@ SUBLEVEL = 39
 EXTRAVERSION = .4
 NAME = Flesh-Eating Bats with Fangs
 
-OPTI=2
+OPTI=3
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -343,9 +343,14 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
 #CFLAGS_MODULE   = -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
 
+ifeq ($(OPTI),3)
+CFLAGS_MODULE   =   -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops  -Wno-unused-but-set-variable -mno-unaligned-access -fno-pic
+endif
+
+
 ##opt
 ifeq ($(OPTI),2)
-CFLAGS_MODULE   =   -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+CFLAGS_MODULE   =   -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=softfp -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops  -Wno-unused-but-set-variable -mno-unaligned-access -fno-pic
 endif
 
 ##normal
@@ -355,16 +360,21 @@ endif
 
 ##default
 ifeq ($(OPTI),0)
-CFLAGS_MODULE   =
+CFLAGS_MODULE   = 
 endif
 
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
 #CFLAGS_KERNEL	= -O2 -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm -mstructure-size-boundary=32 --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
 
+ifeq ($(OPTI),3)
+CFLAGS_KERNEL	=  -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+endif
+
+
 ##opt
 ifeq ($(OPTI),2)
-CFLAGS_KERNEL	=  -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=hard -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
+CFLAGS_KERNEL	=  -mcpu=cortex-a9 -mtune=cortex-a9 -mfpu=vfpv3-d16 -ftree-vectorize -mfloat-abi=softfp -ffast-math -fsingle-precision-constant -marm  --param l2-cache-size=1024 -ftree-vectorize -funswitch-loops
 endif
 
 ##normal
@@ -374,7 +384,7 @@ endif
 
 ##default
 ifeq ($(OPTI),0)
-CFLAGS_KERNEL	=
+CFLAGS_KERNEL	= 
 endif
 
 AFLAGS_KERNEL	=

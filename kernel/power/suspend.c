@@ -30,7 +30,8 @@
 
 #include "power.h"
 
-extern int asusec_suspend_hub_callback(void);
+extern int asusec_suspend_hub_callback2(void);
+extern int asusec_close_keyboard(void);
 extern int asusec_resume(int);
 extern int hub_suspended;
 //extern void reload_asusec();
@@ -315,7 +316,8 @@ int enter_state(suspend_state_t state)
 			printk("usb wait1\n");
 			msleep(500);
 		}
-		asusec_suspend_hub_callback();
+		asusec_close_keyboard();
+////		asusec_suspend_hub_callback2();
 /*		while (!hub_suspended) {
 			asusec_suspend_hub_callback();
 			if (retries-- == 0)
@@ -332,6 +334,8 @@ int enter_state(suspend_state_t state)
 */		
 //		printk("mutex-\n");
 //		mutex_unlock(&usb_mutex);
+
+/*
 		if (!hub_suspended) {
 			stop_dock();
 			printk("Dock problem\n");
@@ -344,6 +348,7 @@ int enter_state(suspend_state_t state)
 				goto Unlock;
 			}
 		} 
+*/		
 //		nousb=0;
 		failed_dock=0;
 		msleep(2000);	

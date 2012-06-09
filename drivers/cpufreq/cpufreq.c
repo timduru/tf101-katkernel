@@ -33,6 +33,8 @@
 
 #include <trace/events/power.h>
 
+#include <asm/cpu.h>
+
 #include "../dvfs.h"
 int *UV_mV_Ptr; // Stored voltage table from cpufreq sysfs
 extern struct dvfs *cpu_dvfs;
@@ -194,10 +196,9 @@ EXPORT_SYMBOL_GPL(cpufreq_cpu_put);
  * systems as each CPU might be scaled differently. So, use the arch
  * per-CPU loops_per_jiffy value wherever possible.
  */
-#ifndef CONFIG_SMP
 static unsigned long l_p_j_ref;
 static unsigned int  l_p_j_ref_freq;
-
+#ifndef CONFIG_SMP
 static void adjust_jiffies(unsigned long val, struct cpufreq_freqs *ci)
 {
 	if (ci->flags & CPUFREQ_CONST_LOOPS)
@@ -219,9 +220,48 @@ static void adjust_jiffies(unsigned long val, struct cpufreq_freqs *ci)
 	}
 }
 #else
-static inline void adjust_jiffies(unsigned long val, struct cpufreq_freqs *ci)
+/* Tegra 2 (like OMAP), has a single frequency and voltage plane, so this should be safe */
+struct lpj_info {
+	unsigned long	ref;
+	unsigned int	freq;
+};
+static DEFINE_PER_CPU(struct lpj_info, lpj_ref);
+
+static void adjust_jiffies(unsigned long val, struct cpufreq_freqs *ci)
 {
-	return;
+	struct cpufreq_policy *policy;
+	unsigned int i;
+
+	if (ci->flags & CPUFREQ_CONST_LOOPS)
+		return;
+
+	if (!l_p_j_ref_freq) {
+		l_p_j_ref = loops_per_jiffy;
+		l_p_j_ref_freq = ci->old;
+		pr_debug("saving %lu as reference value for loops_per_jiffy; "
+			"freq is %u kHz\n", l_p_j_ref, l_p_j_ref_freq);
+	}
+
+	if ((val == CPUFREQ_PRECHANGE  && ci->old < ci->new) ||
+	    (val == CPUFREQ_POSTCHANGE && ci->old > ci->new) ||
+	    (val == CPUFREQ_RESUMECHANGE || val == CPUFREQ_SUSPENDCHANGE)) {
+		policy = per_cpu(cpufreq_cpu_data, ci->cpu);
+
+		for_each_cpu(i, policy->cpus) {
+			struct lpj_info *lpj = &per_cpu(lpj_ref, i);
+			if (!lpj->freq) {
+				lpj->ref = per_cpu(cpu_data, i).loops_per_jiffy;
+				lpj->freq = ci->old;
+			}
+			per_cpu(cpu_data, i).loops_per_jiffy =
+				cpufreq_scale(lpj->ref, lpj->freq, ci->new);
+		}
+
+		loops_per_jiffy = cpufreq_scale(l_p_j_ref, l_p_j_ref_freq,
+								ci->new);
+		pr_debug("scaling loops_per_jiffy to %lu "
+			"for frequency %u kHz\n", loops_per_jiffy, ci->new);
+	}
 }
 #endif
 

@@ -51,7 +51,7 @@
 #define HOSTPC_REG_OFFSET		0x1b4
 
 //add for usb3 suspend sequence before the asusdec driver suspend
-extern int asusec_suspend_hub_callback(void);
+extern int asusec_suspend_hub_callback2(void);
 #define HOSTPC1_DEVLC_STS 		(1 << 28)
 #define HOSTPC1_DEVLC_PTS(x)		(((x) & 0x7) << 29)
 
@@ -1278,11 +1278,11 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 		if (tegra->default_enable)
 			clk_disable(tegra->clk);
 		//add for usb3 suspend sequence before the asusec driver suspend
-/*		if (tegra->phy->instance == 2) {
+		if (tegra->phy->instance == 2) {
 			printk(KERN_INFO"asusec suspend\n");
-			asusec_suspend_hub_callback();
+			asusec_suspend_hub_callback2();
 		}
-*/		mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
+		mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
 		return 0;
 	}
 
@@ -1293,11 +1293,11 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 	if (tegra->default_enable)
 		clk_disable(tegra->clk);
 	//add for usb3 suspend sequence before the asusec driver suspend
-/*	if (tegra->phy->instance == 2) {
+	if (tegra->phy->instance == 2) {
 		printk(KERN_INFO"asusec suspend\n");
-		asusec_suspend_hub_callback();
+		asusec_suspend_hub_callback2();
 	}
-*/	mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
+	mutex_unlock(&tegra->tegra_ehci_hcd_mutex);
 	return ret;
 }
 #endif

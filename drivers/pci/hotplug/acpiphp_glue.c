@@ -110,7 +110,7 @@ static int post_dock_fixups(struct notifier_block *nb, unsigned long val,
 }
 
 
-static struct acpi_dock_ops acpiphp_dock_ops = {
+static const struct acpi_dock_ops acpiphp_dock_ops = {
 	.handler = handle_hotplug_event_func,
 };
 
@@ -827,6 +827,13 @@ static int __ref enable_device(struct acpiphp_slot *slot)
 	acpiphp_set_hpp_values(bus);
 	acpiphp_set_acpi_region(slot);
 	pci_enable_bridges(bus);
+
+	list_for_each_entry(dev, &bus->devices, bus_list) {
+		/* Assume that newly added devices are powered on already. */
+		if (!dev->is_added)
+			dev->current_state = PCI_D0;
+	}
+
 	pci_bus_add_devices(bus);
 
 	list_for_each_entry(func, &slot->funcs, sibling) {

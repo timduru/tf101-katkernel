@@ -1323,6 +1323,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 	int i = 0;
 	int d_counter = 0;
 	int gpio_state = 0;
+//	int   act=0;
 	ASUSEC_INFO("Dock-init function\n");
 	wake_lock(&ec_chip->wake_lock_init);
 	if (ASUSGetProjectID()==101){
@@ -1346,6 +1347,7 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 #endif
 			ec_chip->dock_det--;
 			ec_chip->re_init = 0;
+//			act=1;
 		}
 		
 		mutex_lock(&ec_chip->input_lock);
@@ -1380,7 +1382,11 @@ static void asusec_dock_init_work_function(struct work_struct *dat)
 			}
 //			hub_suspended=0;
 		}
-//////		switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in ? 10 : 0);
+//		if (act==1) {
+//			printk("Dock state changed\n");
+//			switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in);
+//		}
+		switch_set_state(&ec_chip->dock_sdev, ec_chip->dock_in ? 10 : 0);
 		mutex_unlock(&ec_chip->input_lock);
 	}
 	else if (ASUSGetProjectID()==102){
@@ -2287,6 +2293,68 @@ int asusec_suspend_hub_callback(void){
 	if (ec_chip->dock_in){
 //		printk("mutex+\n");
 //		mutex_lock(&usb_mutex);
+		
+		ret_val = asusec_i2c_test(ec_chip->client);
+		if(ret_val < 0){
+			printk("retry i2c test\n");
+			//asusec_dock_init_work_function(1);
+			//asusec_resume(1);
+			////asusec_reset_dock();
+			////msleep(500);
+			ret_val = asusec_i2c_test(ec_chip->client);
+		}
+		if(ret_val < 0){
+			printk("fail to access ec\n");
+//			printk("mutex-\n");
+//			mutex_unlock(&usb_mutex);
+			goto fail_to_access_ec;
+		}
+		
+		if (nousb==1) {
+			printk("usb wait2\n");
+			msleep(500);
+		}
+
+		asusec_dockram_read_data(0x0A);
+
+		ec_chip->i2c_dm_data[0] = 8;
+		
+		ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0xDF;
+		ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] | 0x22;
+		
+		if (ec_chip->ec_wakeup){
+			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] | 0x80;
+		} else {
+			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0x7F;
+		}
+		asusec_dockram_write_data(0x0A,9);	
+		hub_suspended=1;
+//		printk("mutex-\n");
+//		mutex_unlock(&usb_mutex);
+	}
+	
+fail_to_access_ec:		
+	flush_workqueue(asusec_wq);
+	ec_chip->suspend_state = 1;
+	ec_chip->dock_det = 0;
+	printk("asusec_suspend_hub_callback-\n");
+	return 0;
+	
+}
+EXPORT_SYMBOL(asusec_suspend_hub_callback);
+
+int asusec_suspend_hub_callback2(void){
+	int ret_val;
+
+	printk("asusec_suspend_hub_callback2+\n");
+	
+	ASUSEC_NOTICE("suspend\n");
+/*	
+	hub_suspended=0;
+	if (ec_chip->dock_in){
+//		printk("mutex+\n");
+//		mutex_lock(&usb_mutex);
+		
 		ret_val = asusec_i2c_test(ec_chip->client);
 		if(ret_val < 0){
 			printk("retry i2c test\n");
@@ -2312,11 +2380,13 @@ int asusec_suspend_hub_callback(void){
 		ec_chip->i2c_dm_data[0] = 8;
 		ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0xDF;
 		ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] | 0x22;
+		
 		if (ec_chip->ec_wakeup){
 			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] | 0x80;
 		} else {
 			ec_chip->i2c_dm_data[5] = ec_chip->i2c_dm_data[5] & 0x7F;
 		}
+		
 		asusec_dockram_write_data(0x0A,9);	
 		hub_suspended=1;
 //		printk("mutex-\n");
@@ -2324,15 +2394,15 @@ int asusec_suspend_hub_callback(void){
 	}
 	
 fail_to_access_ec:		
+*/
 	flush_workqueue(asusec_wq);
 	ec_chip->suspend_state = 1;
 	ec_chip->dock_det = 0;
-	printk("asusec_suspend_hub_callback-\n");
+	printk("asusec_suspend_hub_callback2-\n");
 	return 0;
 	
 }
-EXPORT_SYMBOL(asusec_suspend_hub_callback);
-
+EXPORT_SYMBOL(asusec_suspend_hub_callback2);
 
 int asusec_is_ac_over_10v_callback(void){
 

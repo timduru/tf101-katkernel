@@ -80,7 +80,7 @@ static struct dvfs_rail tegra2_dvfs_rail_vdd_aon = {
 #endif
 };
 
-/* vdd_core and vdd_aon must be 50 mV higher than vdd_cpu */
+/* vdd_core and vdd_aon must be 25 mV higher than vdd_cpu */
 static int tegra2_dvfs_rel_vdd_cpu_vdd_core(struct dvfs_rail *vdd_cpu,
 	struct dvfs_rail *vdd_core)
 {

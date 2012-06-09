@@ -690,8 +690,21 @@ static int bq20z45_get_property(struct power_supply *psy,
 	u8 count;
 	
 	if	(suspend_process_going) {
-		printk("no battery data while suspending\n");
-		return -EINVAL;
+		if (psp == POWER_SUPPLY_PROP_CAPACITY) {
+			val->intval=bq20z45_device->old_capacity;
+			return 0;
+		} else {
+			if (psp == POWER_SUPPLY_PROP_STATUS){
+				val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
+			} else {
+				if (psp == POWER_SUPPLY_PROP_TEMP) {
+					val->intval=bq20z45_device->old_temperature;
+				} else {
+					printk("no battery data while suspending\n");
+					return -EINVAL;
+				}	
+			}
+		}
 	}
 		
 	switch (psp) {
