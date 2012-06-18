@@ -1,0 +1,22 @@
+##make -j8 ARCH=arm CROSS_COMPILE=/opt/android-ndk-r5/toolchains/arm-eabi-4.4.0/prebuilt/linux-x86/bin/arm-eabi-
+#make -j8 ARCH=arm CROSS_COMPILE=/opt/android-toolchain-eabi/bin/arm-eabi-
+#make -j8 ARCH=arm CROSS_COMPILE=/opt/android-toolchain-eabi-4.7/bin/arm-eabi-
+make -j8 ARCH=arm CROSS_COMPILE=/opt/android-toolchain-eabi-4.7/bin/arm-linux-androideabi-
+
+#make -j8 ARCH=arm CROSS_COMPILE=/opt/android-ndk-r6/toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin/arm-linux-androideabi- 
+#make -j8 ARCH=arm CROSS_COMPILE=/opt/android-ndk-r7c/toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin/arm-linux-androideabi- 
+cp drivers/scsi/scsi_wait_scan.ko /opt/transformer/base-ics/system/lib/modules/
+cp drivers/net/wireless/bcm4329/bcm4329.ko /opt/transformer/base-ics/system/lib/modules/
+cp drivers/power/battery_rvsd.ko /opt/transformer/base-ics/system/lib/modules/
+cp drivers/net/wireless/bcmdhd/bcmdhd.ko /opt/transformer/base-ics/system/lib/modules/
+cp crypto/md4.ko /opt/transformer/base-ics/system/lib/modules/
+cp fs/cifs/cifs.ko /opt/transformer/base-ics/system/lib/modules/
+cp drivers/input/ff-memless.ko /opt/transformer/base-ics/system/lib/modules/
+cp drivers/input/joystick/xpad.ko /opt/transformer/base-ics/system/lib/modules/
+cp drivers/net/tun.ko  /opt/transformer/base-ics/system/lib/modules/
+cp fs/jfs/jfs.ko /opt/transformer/base-ics/system/lib/modules/
+cp fs/reiserfs/reiserfs.ko /opt/transformer/base-ics/system/lib/modules/
+cp arch/arm/boot/zImage /tmp/
+
+/opt/transformer/BootTools/mkbootimg --kernel /tmp/zImage --ramdisk ../tmp/newkernelblob-megatron.LNX-ramdisk.cpio.gz -o /tmp/thedailykern.LNX
+/opt/transformer/BlobTools/blobpack ../tmp/thedailykern.HEADER ../base-ics/kern.blob LNX /tmp/thedailykern.LNX

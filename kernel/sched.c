@@ -6116,9 +6116,9 @@ static int  migrate_tasks2(unsigned int dead_cpu)
 			loop=0;
 		 }else if(++loop > MAXIMAL_MIGRATION_RETRY_COUNT ){
 			 if(next)
-				printk("[Warning]migrate_tasks2 failed! nr_running=%u dead_cpu=%u task=%s\n",rq->nr_running,dead_cpu,next->comm);
+				printk("[Warning]migrate_tasks2 failed! nr_running=%lu dead_cpu=%u task=%s\n",rq->nr_running,dead_cpu,next->comm);
 			 else
-				printk("[Warning]migrate_tasks2 failed! nr_running=%u dead_cpu=%u \n",rq->nr_running,dead_cpu);
+				printk("[Warning]migrate_tasks2 failed! nr_running=%lu dead_cpu=%u \n",rq->nr_running,dead_cpu);
 
 			if(!spin_is_locked(&rq->lock))
 				raw_spin_lock(&rq->lock);
@@ -6380,7 +6380,7 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 			BUG_ON(!cpumask_test_cpu(cpu, rq->rd->span));
 			set_rq_offline(rq);
 		}
-		if(migrate_tasks2(cpu)){
+/*		if(migrate_tasks(cpu)){
 			printk("[Warning]migration_call: migrate_tasks failed+\n");
 			if (rq->rd)
 				set_rq_online(rq);
@@ -6388,6 +6388,7 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 			printk("[Warning]migration_call: migrate_tasks failed -\n");
 			return NOTIFY_BAD;
 		}
+*/		migrate_tasks(cpu);
 		BUG_ON(rq->nr_running != 1); /* the migration thread */
 		raw_spin_unlock_irqrestore(&rq->lock, flags);
 		migrate_nr_uninterruptible(rq);
