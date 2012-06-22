@@ -467,8 +467,10 @@ static int set_irq_wake_real(unsigned int irq, unsigned int on)
 	struct irq_desc *desc = irq_to_desc(irq);
 	int ret = -ENXIO;
 
-	if (desc->irq_data.chip->irq_set_wake)
+	if (desc->irq_data.chip->irq_set_wake) {
+		//printk("wake real\n");
 		ret = desc->irq_data.chip->irq_set_wake(&desc->irq_data, on);
+	}
 
 	return ret;
 }
@@ -491,19 +493,26 @@ int irq_set_irq_wake(unsigned int irq, unsigned int on)
 	struct irq_desc *desc = irq_get_desc_buslock(irq, &flags);
 	int ret = 0;
 
-	if (!desc)
+	if (!desc) {
+		//printk("no desc\n");
 		return -EINVAL;
+	}
 
 	/* wakeup-capable irqs can be shared between drivers that
 	 * don't need to have the same sleep mode behaviors.
 	 */
 	if (on) {
 		if (desc->wake_depth++ == 0) {
+			//printk("irq1\n");
 			ret = set_irq_wake_real(irq, on);
-			if (ret)
+			if (ret) {
+				//printk("irq2\n");
 				desc->wake_depth = 0;
-			else
+			}
+			else {
+				//printk("irq3\n");
 				irqd_set(&desc->irq_data, IRQD_WAKEUP_STATE);
+			}
 		}
 	} else {
 		if (desc->wake_depth == 0) {

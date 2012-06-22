@@ -48,11 +48,9 @@ static int regmap_spi_read(struct device *dev,
 }
 
 static struct regmap_bus regmap_spi = {
-	.type = &spi_bus_type,
 	.write = regmap_spi_write,
 	.gather_write = regmap_spi_gather_write,
 	.read = regmap_spi_read,
-	.owner = THIS_MODULE,
 	.read_flag_mask = 0x80,
 };
 
@@ -71,5 +69,22 @@ struct regmap *regmap_init_spi(struct spi_device *spi,
 	return regmap_init(&spi->dev, &regmap_spi, config);
 }
 EXPORT_SYMBOL_GPL(regmap_init_spi);
+
+/**
+ * devm_regmap_init_spi(): Initialise register map
+ *
+ * @spi: Device that will be interacted with
+ * @config: Configuration for register map
+ *
+ * The return value will be an ERR_PTR() on error or a valid pointer
+ * to a struct regmap.  The map will be automatically freed by the
+ * device management code.
+ */
+struct regmap *devm_regmap_init_spi(struct spi_device *spi,
+				    const struct regmap_config *config)
+{
+	return devm_regmap_init(&spi->dev, &regmap_spi, config);
+}
+EXPORT_SYMBOL_GPL(devm_regmap_init_spi);
 
 MODULE_LICENSE("GPL");

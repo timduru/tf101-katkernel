@@ -33,6 +33,8 @@
 #include <linux/cpuidle.h>
 #include <linux/console.h>
 
+//#include <linux/gpio.h>
+
 #include <asm/cacheflush.h>
 #include <asm/leds.h>
 #include <asm/processor.h>
@@ -277,6 +279,7 @@ void machine_halt(void)
 }
 extern int reboot_test_tool_installed;
 extern int exit_charging_mode;
+#define TEGRA_GPIO_PX5                    189 
 void machine_power_off(void)
 {
 #ifdef CONFIG_ASUS_CHARGER_MODE
