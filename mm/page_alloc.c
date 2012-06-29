@@ -1870,6 +1870,8 @@ __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
 
 	return NULL;
 }
+
+extern int  compact_nodes(void);
 #else
 static inline struct page *
 __alloc_pages_direct_compact(gfp_t gfp_mask, unsigned int order,
@@ -2106,6 +2108,12 @@ rebalance:
 					sync_migration);
 	if (page)
 		goto got_pg;
+	
+#ifdef CONFIG_COMPACTION	
+	printk("force compaction\n");
+	compact_nodes();
+#endif
+	
 	sync_migration = !(gfp_mask & __GFP_NO_KSWAPD);
 
 	/* Try direct reclaim and then allocating */
