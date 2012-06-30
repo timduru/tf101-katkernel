@@ -102,7 +102,37 @@ static int __kprobes notifier_call_chain(struct notifier_block **nl,
 	}
 	return ret;
 }
+static int __kprobes notifier_call_chain2(struct notifier_block **nl,
+					unsigned long val, void *v,
+					int nr_to_call,	int *nr_calls)
+{
+	int ret = NOTIFY_DONE;
+	struct notifier_block *nb, *next_nb;
+	int loop=0;
 
+	nb = rcu_dereference_raw(*nl);
+	while (nb && nr_to_call) {
+		next_nb = rcu_dereference_raw(nb->next);
+
+#ifdef CONFIG_DEBUG_NOTIFIERS
+		if (unlikely(!func_ptr_is_kernel_text(nb->notifier_call))) {
+			WARN(1, "Invalid notifier called!");
+			nb = next_nb;
+			continue;
+		}
+#endif
+		printk("notifier_call_chain %u call=%d %pF  val=%u ",++loop,nr_to_call,nb->notifier_call,val);
+		ret = nb->notifier_call(nb, val, v);
+              printk(" ret=%d\n",ret);
+		if (nr_calls)
+			(*nr_calls)++;
+		if ((ret & NOTIFY_STOP_MASK) == NOTIFY_STOP_MASK)
+			break;
+		nb = next_nb;
+		nr_to_call--;
+	}
+	return ret;
+}
 /*
  *	Atomic notifier chain routines.  Registration and unregistration
  *	use a spinlock, and call_chain is synchronized by RCU (no locks).
@@ -318,7 +348,33 @@ int __blocking_notifier_call_chain(struct blocking_notifier_head *nh,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(__blocking_notifier_call_chain);
+ int __blocking_notifier_call_chain2(struct blocking_notifier_head *nh,
+				   unsigned long val, void *v,
+				   int nr_to_call, int *nr_calls)
+{
+	int ret = NOTIFY_DONE;
+	int loop=0;
 
+	/*
+	 * We check the head outside the lock, but if this access is
+	 * racy then it does not matter what the result of the test
+	 * is, we re-check the list after having taken the lock anyway:
+	 */
+	if (rcu_dereference_raw(nh->head)) {
+		printk("rcu_dereference_raw loop=%u\n",loop++);
+		down_read(&nh->rwsem);
+		ret = notifier_call_chain2(&nh->head, val, v, nr_to_call,
+					nr_calls);
+		up_read(&nh->rwsem);
+        }
+	return ret;
+}
+int blocking_notifier_call_chain2(struct blocking_notifier_head *nh,
+		unsigned long val, void *v)
+{
+	return __blocking_notifier_call_chain2(nh, val, v, -1, NULL);
+}
+EXPORT_SYMBOL_GPL(blocking_notifier_call_chain2);
 int blocking_notifier_call_chain(struct blocking_notifier_head *nh,
 		unsigned long val, void *v)
 {
@@ -524,6 +580,7 @@ void srcu_init_notifier_head(struct srcu_notifier_head *nh)
 	nh->head = NULL;
 }
 EXPORT_SYMBOL_GPL(srcu_init_notifier_head);
+
 
 static ATOMIC_NOTIFIER_HEAD(die_chain);
 

@@ -40,9 +40,27 @@ static int ehci_msm_reset(struct usb_hcd *hcd)
 	int retval;
 
 	ehci->caps = USB_CAPLENGTH;
-	hcd->has_tt = 1;
+	ehci->regs = USB_CAPLENGTH +
+		HC_LENGTH(ehci_readl(ehci, &ehci->caps->hc_capbase));
+	dbg_hcs_params(ehci, "reset");
+	dbg_hcc_params(ehci, "reset");
 
-	retval = ehci_setup(hcd);
+	/* cache the data to minimize the chip reads*/
+	ehci->hcs_params = ehci_readl(ehci, &ehci->caps->hcs_params);
+
+	hcd->has_tt = 1;
+	ehci->sbrn = HCD_USB2;
+
+	retval = ehci_halt(ehci);
+	if (retval)
+		return retval;
+
+	/* data structure init */
+	retval = ehci_init(hcd);
+	if (retval)
+		return retval;
+
+	retval = ehci_reset(ehci);
 	if (retval)
 		return retval;
 

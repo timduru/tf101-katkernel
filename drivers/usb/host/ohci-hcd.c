@@ -1,7 +1,5 @@
 /*
- * Open Host Controller Interface (OHCI) driver for USB.
- *
- * Maintainer: Alan Stern <stern@rowland.harvard.edu>
+ * OHCI HCD (Host Controller Driver) for USB.
  *
  * (C) Copyright 1999 Roman Weissgaerber <weissg@vienna.at>
  * (C) Copyright 2000-2004 David Brownell <dbrownell@users.sourceforge.net>
@@ -389,14 +387,17 @@ ohci_shutdown (struct usb_hcd *hcd)
 	struct ohci_hcd *ohci;
 
 	ohci = hcd_to_ohci (hcd);
-	ohci_writel(ohci, (u32) ~0, &ohci->regs->intrdisable);
+	ohci_writel (ohci, OHCI_INTR_MIE, &ohci->regs->intrdisable);
+	ohci->hc_control = ohci_readl(ohci, &ohci->regs->control);
 
-	/* Software reset, after which the controller goes into SUSPEND */
-	ohci_writel(ohci, OHCI_HCR, &ohci->regs->cmdstatus);
-	ohci_readl(ohci, &ohci->regs->cmdstatus);	/* flush the writes */
-	udelay(10);
+	/* If the SHUTDOWN quirk is set, don't put the controller in RESET */
+	ohci->hc_control &= (ohci->flags & OHCI_QUIRK_SHUTDOWN ?
+			OHCI_CTRL_RWC | OHCI_CTRL_HCFS :
+			OHCI_CTRL_RWC);
+	ohci_writel(ohci, ohci->hc_control, &ohci->regs->control);
 
-	ohci_writel(ohci, ohci->fminterval, &ohci->regs->fminterval);
+	/* flush the writes */
+	(void) ohci_readl (ohci, &ohci->regs->control);
 }
 
 static int check_ed(struct ohci_hcd *ohci, struct ed *ed)
@@ -1104,11 +1105,6 @@ MODULE_LICENSE ("GPL");
 #ifdef CONFIG_USB_CNS3XXX_OHCI
 #include "ohci-cns3xxx.c"
 #define PLATFORM_DRIVER		ohci_hcd_cns3xxx_driver
-#endif
-
-#ifdef CONFIG_USB_OHCI_ATH79
-#include "ohci-ath79.c"
-#define PLATFORM_DRIVER		ohci_hcd_ath79_driver
 #endif
 
 #if	!defined(PCI_DRIVER) &&		\

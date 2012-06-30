@@ -30,12 +30,57 @@
 
 #include "power.h"
 
-extern int asusec_suspend_hub_callback2(void);
+#include <mach/iomap.h>
+
+#define TIMER_PTV	0x0
+#define TIMER_EN	(1 << 31)
+#define TIMER_PERIODIC	(1 << 30)
+
+#define TIMER_PCR	0x4
+#define TIMER_PCR_INTR	(1 << 30)
+
+#define WDT_EN		(1 << 5)
+#define WDT_SEL_TMR1	(0 << 4)
+#define WDT_SYS_RST	(1 << 2)
+
+
+//extern int asusec_suspend_hub_callback2(void);
 extern int asusec_close_keyboard(void);
 extern int asusec_resume(int);
 extern int hub_suspended;
-//extern void reload_asusec();
-extern void stop_dock();
+
+//extern int nousb=0;
+
+static void __iomem *watchdog_timer  = IO_ADDRESS(TEGRA_TMR1_BASE);
+static void __iomem *watchdog_source = IO_ADDRESS(TEGRA_CLK_RESET_BASE);
+ void watchdog_enable(int sec)
+{
+	u32 val;
+       printk("watchdog_enable\n");
+	val = sec* 1000000ul;
+	val |= (TIMER_EN | TIMER_PERIODIC);
+	writel(val, watchdog_timer + TIMER_PTV);
+
+	val = WDT_EN | WDT_SEL_TMR1 | WDT_SYS_RST;
+	writel(val, watchdog_source);
+}
+
+void watchdog_disable(void)
+{
+       printk("watchdog_disable\n");
+	writel(0, watchdog_source);
+	writel(0, watchdog_timer + TIMER_PTV);
+	writel(TIMER_PCR_INTR, watchdog_timer + TIMER_PCR);
+}
+static void disable_nonboot_cpus_timeout(unsigned long data)
+{
+	printk(KERN_EMERG "**** disable_nonboot_cpus_timeout\n");
+	watchdog_disable();
+	BUG();
+}
+int suspend_enter_flag=0;
+extern struct timer_list suspend_timer;
+extern  void suspend_worker_timeout(unsigned long data);
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
@@ -57,7 +102,6 @@ void suspend_set_ops(const struct platform_suspend_ops *ops)
 	suspend_ops = ops;
 	mutex_unlock(&pm_mutex);
 }
-EXPORT_SYMBOL_GPL(suspend_set_ops);
 
 bool valid_state(suspend_state_t state)
 {
@@ -79,7 +123,6 @@ int suspend_valid_only_mem(suspend_state_t state)
 {
 	return state == PM_SUSPEND_MEM;
 }
-EXPORT_SYMBOL_GPL(suspend_valid_only_mem);
 
 static int suspend_test(int level)
 {
@@ -99,30 +142,49 @@ static int suspend_test(int level)
  *	This is common code that is called for each state that we're entering.
  *	Run suspend notifiers, allocate a console and stop all processes.
  */
+extern int pm_notifier_call_chain2(unsigned long val);
 static int suspend_prepare(void)
 {
 	int error;
 
 	if (!suspend_ops || !suspend_ops->enter)
 		return -EPERM;
+
 	pm_prepare_console();
-
-	error = pm_notifier_call_chain(PM_SUSPEND_PREPARE);
-	if (error)
+	error = pm_notifier_call_chain2(PM_SUSPEND_PREPARE);
+	if (error){
+		printk("suspend_prepare fail error=%d\n",error);
 		goto Finish;
-
+	}
 	error = usermodehelper_disable();
 	if (error)
 		goto Finish;
+	watchdog_disable();
+	del_timer_sync(&suspend_timer);
+	destroy_timer_on_stack(&suspend_timer);
+	init_timer_on_stack(&suspend_timer);
+	suspend_timer.expires = jiffies + HZ * 42;
+	suspend_timer.function = suspend_worker_timeout;
+	add_timer(&suspend_timer);
+	watchdog_enable(44);
 
 	error = suspend_freeze_processes();
+	watchdog_disable();
+	del_timer_sync(&suspend_timer);
+	destroy_timer_on_stack(&suspend_timer);
+	init_timer_on_stack(&suspend_timer);
+	suspend_timer.expires = jiffies + HZ * 15;
+	suspend_timer.function = suspend_worker_timeout;
+	add_timer(&suspend_timer);
+	watchdog_enable(17);
+
 	if (!error)
 		return 0;
 
 	suspend_thaw_processes();
 	usermodehelper_enable();
  Finish:
-	pm_notifier_call_chain(PM_POST_SUSPEND);
+	pm_notifier_call_chain2(PM_POST_SUSPEND);
 	pm_restore_console();
 	return error;
 }
@@ -140,15 +202,18 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
 }
 
 /**
- * suspend_enter - enter the desired system sleep state.
- * @state: State to enter
- * @wakeup: Returns information that suspend should not be entered again.
+ *	suspend_enter - enter the desired system sleep state.
+ *	@state:		state to enter
  *
- * This function should be called after devices have been suspended.
+ *	This function should be called after devices have been suspended.
  */
-static int suspend_enter(suspend_state_t state, bool *wakeup)
+static int suspend_enter(suspend_state_t state)
 {
 	int error;
+	struct timer_list timer;
+	init_timer_on_stack(&timer);
+	timer.expires = jiffies + HZ * 6;
+	timer.function = disable_nonboot_cpus_timeout;
 
 	if (suspend_ops->prepare) {
 		error = suspend_ops->prepare();
@@ -170,29 +235,35 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	if (suspend_test(TEST_PLATFORM))
 		goto Platform_wake;
-
+	add_timer(&timer);
+	suspend_enter_flag=1;
 	error = disable_nonboot_cpus();
+	suspend_enter_flag=0;
+	del_timer_sync(&timer);
+	destroy_timer_on_stack(&timer);
 	if (error || suspend_test(TEST_CPUS))
 		goto Enable_cpus;
 
 	arch_suspend_disable_irqs();
 	BUG_ON(!irqs_disabled());
 
-	error = syscore_suspend();
+	error = sysdev_suspend(PMSG_SUSPEND);
 	if (!error) {
-		*wakeup = pm_wakeup_pending();
-		if (!(suspend_test(TEST_CORE) || *wakeup)) {
+		error = syscore_suspend();
+		if (error)
+			sysdev_resume();
+	}
+	if (!error) {
+		if (!(suspend_test(TEST_CORE) || pm_wakeup_pending())) {
 			error = suspend_ops->enter(state);
 			events_check_enabled = false;
 		}
 		syscore_resume();
+		sysdev_resume();
 	}
 
 	arch_suspend_enable_irqs();
 	BUG_ON(irqs_disabled());
-
- 	/* Kick the lockup detector */
-	lockup_detector_bootcpu_resume();
 
  Enable_cpus:
 	enable_nonboot_cpus();
@@ -218,7 +289,6 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 int suspend_devices_and_enter(suspend_state_t state)
 {
 	int error;
-	bool wakeup = false;
 
 	if (!suspend_ops)
 		return -ENOSYS;
@@ -240,16 +310,15 @@ int suspend_devices_and_enter(suspend_state_t state)
 	if (suspend_test(TEST_DEVICES))
 		goto Recover_platform;
 
-	do {
-		error = suspend_enter(state, &wakeup);
-	} while (!error && !wakeup
-		&& suspend_ops->suspend_again && suspend_ops->suspend_again());
+	suspend_enter(state);
 
  Resume_devices:
 	suspend_test_start();
 	dpm_resume_end(PMSG_RESUME);
 	suspend_test_finish("resume devices");
+        printk("PM: resume_console+\n");
 	resume_console();
+	printk("PM: resume_console-\n");
  Close:
 	if (suspend_ops->end)
 		suspend_ops->end();
@@ -271,10 +340,12 @@ int suspend_devices_and_enter(suspend_state_t state)
  */
 static void suspend_finish(void)
 {
+	printk("suspend_finish+\n");
 	suspend_thaw_processes();
 	usermodehelper_enable();
-	pm_notifier_call_chain(PM_POST_SUSPEND);
+	pm_notifier_call_chain2(PM_POST_SUSPEND);
 	pm_restore_console();
+	printk("suspend_finish-\n");
 }
 
 /**
@@ -287,24 +358,24 @@ static void suspend_finish(void)
  *	Then, do the setup for suspend, enter the state, and cleaup (after
  *	we've woken up).
  */
+
 extern struct mutex usb_mutex;
 extern int nousb=0;
 
 int failed_dock=0;
-
 
 int enter_state(suspend_state_t state)
 {
 	int error;
 	int dock=0;
 	int retries=3;
-	
+
 	if (!valid_state(state))
 		return -ENODEV;
 
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
-	
+
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
@@ -379,7 +450,6 @@ int enter_state(suspend_state_t state)
 	pr_debug("PM: Finishing wakeup.\n");
 	suspend_finish();
  Unlock:
-//	asusec_resume(0);
 	mutex_unlock(&pm_mutex);
 	return error;
 }
@@ -393,7 +463,7 @@ int enter_state(suspend_state_t state)
  */
 int pm_suspend(suspend_state_t state)
 {
-	if (state > PM_SUSPEND_ON && state < PM_SUSPEND_MAX)
+	if (state > PM_SUSPEND_ON && state <= PM_SUSPEND_MAX)
 		return enter_state(state);
 	return -EINVAL;
 }

@@ -17,15 +17,11 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/wakelock.h>
-#include <mach/gpio.h>
-#include "../../arch/arm/mach-tegra/gpio-names.h"
+
 /* 
  * Timeout for stopping processes
  */
 #define TIMEOUT	(20 * HZ)
-
-extern int asusec_suspend_hub_callback(void);
-
 
 static inline int freezable(struct task_struct * p)
 {
@@ -54,7 +50,6 @@ static int try_to_freeze_tasks(bool sig_only)
 	if (!sig_only)
 		freeze_workqueues_begin();
 
-	
 	while (true) {
 		todo = 0;
 		read_lock(&tasklist_lock);
@@ -104,9 +99,8 @@ static int try_to_freeze_tasks(bool sig_only)
 		 * We need to retry, but first give the freezing tasks some
 		 * time to enter the regrigerator.
 		 */
-		msleep(100);
+		msleep(10);
 	}
-
 
 	do_gettimeofday(&end);
 	elapsed_csecs64 = timeval_to_ns(&end) - timeval_to_ns(&start);
@@ -158,11 +152,7 @@ int freeze_processes(void)
 {
 	int error;
 
-/*	if (gpio_get_value(TEGRA_GPIO_PX5)==0){
-		asusec_suspend_hub_callback();
-		msleep(500);
-	}
-*/	printk("Freezing user space processes ... ");
+	printk("Freezing user space processes ... ");
 	error = try_to_freeze_tasks(true);
 	if (error)
 		goto Exit;

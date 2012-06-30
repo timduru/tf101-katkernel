@@ -2024,6 +2024,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	unsigned long pages_reclaimed = 0;
 	unsigned long did_some_progress;
 	bool sync_migration = false;
+	bool fcomp = false;
 
 	/*
 	 * In the slowpath, we sanity check order to avoid ever trying to
@@ -2110,8 +2111,11 @@ rebalance:
 		goto got_pg;
 	
 #ifdef CONFIG_COMPACTION	
-	printk("force compaction\n");
-	compact_nodes();
+	if (fcomp == false) {
+		printk("force compaction\n");
+		compact_nodes();
+		fcomp = true;
+	}
 #endif
 	
 	sync_migration = !(gfp_mask & __GFP_NO_KSWAPD);
