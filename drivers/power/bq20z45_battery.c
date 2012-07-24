@@ -60,7 +60,9 @@ int reboot_test_tool_installed=0;
 bool check_rvsd_process=0;
 int exit_charging_mode=0;
 EXPORT_SYMBOL(ready_to_polling);
+#ifdef CONFIG_ASUSEC
 extern int asusec_is_battery_full_callback(int full);
+#endif
 extern  int mxt_enable(void);
 extern  int mxt_disable(void);
 enum {
@@ -679,12 +681,32 @@ static int bq20z45_get_capacity(union power_supply_propval *val)
 	printk("bq20z45_get_capacity val->intval=%u ret=%u\n",val->intval,ret,bq20z45_device->low_battery_present?"low battery event":" ");
 	return 0;
 }
+extern int suspend_process_going;
+
 static int bq20z45_get_property(struct power_supply *psy,
 	enum power_supply_property psp,
 	union power_supply_propval *val)
 {
 	u8 count;
-
+	
+	if	(suspend_process_going) {
+		if (psp == POWER_SUPPLY_PROP_CAPACITY) {
+			val->intval=bq20z45_device->old_capacity;
+			return 0;
+		} else {
+			if (psp == POWER_SUPPLY_PROP_STATUS){
+				val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
+			} else {
+				if (psp == POWER_SUPPLY_PROP_TEMP) {
+					val->intval=bq20z45_device->old_temperature;
+				} else {
+					printk("no battery data while suspending\n");
+					return -EINVAL;
+				}	
+			}
+		}
+	}
+		
 	switch (psp) {
 		case POWER_SUPPLY_PROP_PRESENT:
 		case POWER_SUPPLY_PROP_HEALTH:
@@ -764,7 +786,8 @@ void   register_docking_charging_irq(void)
 	rc= request_irq(gpio_to_irq(TEGRA_GPIO_PS1), charger_pad_dock_interrupt, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING, "dock_charging" , NULL);
 	if (rc < 0)
 		printk(KERN_ERR"Could not register for TEGRA_GPIO_PS1 interrupt, irq = %d, rc = %d\n", gpio_to_irq(TEGRA_GPIO_PS1), rc);
-
+	printk("previous\n");
+	msleep(1000);
 	if(!gpio_get_value(TEGRA_GPIO_PX5) && !gpio_get_value(TEGRA_GPIO_PS1)){
 		battery_docking_status=true;
 		enable_irq(gpio_to_irq(TEGRA_GPIO_PS1));
@@ -1134,16 +1157,20 @@ void charge_ic_enable(bool enable)
 		output_high=true;
 		new_state=CHARGER_STATE_DISABLED;
 	}
+#ifdef CONFIG_ASUSEC	
     if ( (enable) && (old_state!=new_state) )
 		asusec_is_battery_full_callback(false);
+#endif	
     // printk("charge_ic_enable  enable=%x battery_cable_status =%u new_state=%x 0ld_state=%x output_high=%s\n",enable,battery_cable_status ,new_state,old_state,output_high?"HIGH":"LOW");
 	//if(old_state!=new_state)
 	{
 		gpio_set_value(GPIOPIN_CHARGER_ENABLE,output_high);
 		old_state=new_state;
 	}
+#ifdef CONFIG_ASUSEC	
     if ( (!enable) && (old_state!=new_state) )
 		asusec_is_battery_full_callback(true);
+#endif
 }
 
 unsigned int  get_charge_ic_state(void )

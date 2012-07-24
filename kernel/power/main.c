@@ -37,20 +37,9 @@ EXPORT_SYMBOL_GPL(unregister_pm_notifier);
 
 int pm_notifier_call_chain(unsigned long val)
 {
-	return (blocking_notifier_call_chain(&pm_chain_head, val, NULL)
-			== NOTIFY_BAD) ? -EINVAL : 0;
-}
-extern int blocking_notifier_call_chain2(struct blocking_notifier_head *nh,
-		unsigned long val, void *v);
-int pm_notifier_call_chain2(unsigned long val)
-{
-	printk("pm_notifier_call_chain2+\n");
-	int ret=blocking_notifier_call_chain2(&pm_chain_head, val, NULL);
-	printk("pm_notifier_call_chain2-\n");
-	if ( (ret== NOTIFY_BAD) || (ret & NOTIFY_STOP_MASK) )
-		return  -EINVAL;
-	else
-		return 0;
+	int ret = blocking_notifier_call_chain(&pm_chain_head, val, NULL);
+
+	return notifier_to_errno(ret);
 }
 
 /* If set, devices may be suspended and resumed asynchronously. */
@@ -369,6 +358,7 @@ static int __init pm_init(void)
 	if (error)
 		return error;
 	hibernate_image_size_init();
+	hibernate_reserved_size_init();
 	power_kobj = kobject_create_and_add("power", NULL);
 	if (!power_kobj)
 		return -ENOMEM;
