@@ -19,10 +19,30 @@ static struct bfq_entity *bfq_lookup_next_entity(struct bfq_sched_data *sd,
 						 int extract,
 						 struct bfq_data *bfqd);
 
+static inline void bfq_update_budget(struct bfq_entity *next_active)
+{
+	struct bfq_entity *bfqg_entity;
+	struct bfq_group *bfqg;
+	struct bfq_sched_data *group_sd;
+
+	BUG_ON(next_active == NULL);
+
+	group_sd = next_active->sched_data;
+
+	bfqg = container_of(group_sd, struct bfq_group, sched_data);
+	/*
+	 * bfq_group's my_entity field is not NULL only if the group
+	 * is not the root group. We must not touch the root entity
+	 * as it must never become an active entity.
+	 */
+	bfqg_entity = bfqg->my_entity;
+	if (bfqg_entity != NULL)
+		bfqg_entity->budget = next_active->budget;
+}
+
 static int bfq_update_next_active(struct bfq_sched_data *sd)
 {
-	struct bfq_group *bfqg;
-	struct bfq_entity *entity, *next_active;
+	struct bfq_entity *next_active;
 
 	if (sd->active_entity != NULL)
 		/* will update/requeue at the end of service */
@@ -38,12 +58,8 @@ static int bfq_update_next_active(struct bfq_sched_data *sd)
 	next_active = bfq_lookup_next_entity(sd, 0, NULL);
 	sd->next_active = next_active;
 
-	if (next_active != NULL) {
-		bfqg = container_of(sd, struct bfq_group, sched_data);
-		entity = bfqg->my_entity;
-		if (entity != NULL)
-			entity->budget = next_active->budget;
-	}
+	if (next_active != NULL)
+		bfq_update_budget(next_active);
 
 	return 1;
 }
@@ -67,6 +83,10 @@ static inline int bfq_update_next_active(struct bfq_sched_data *sd)
 
 static inline void bfq_check_next_active(struct bfq_sched_data *sd,
 					 struct bfq_entity *entity)
+{
+}
+
+static inline void bfq_update_budget(struct bfq_entity *next_active)
 {
 }
 #endif
@@ -135,7 +155,7 @@ static inline void bfq_calc_finish(struct bfq_entity *entity,
 
 	if (bfqq != NULL) {
 		bfq_log_bfqq(bfqq->bfqd, bfqq,
-			"calc_finish: serv %lu, w %d",
+			"calc_finish: serv %lu, w %lu",
 			service, entity->weight);
 		bfq_log_bfqq(bfqq->bfqd, bfqq,
 			"calc_finish: start %llu, finish %llu, delta %llu",
@@ -363,13 +383,11 @@ static unsigned short bfq_weight_to_ioprio(int weight)
 static inline void bfq_get_entity(struct bfq_entity *entity)
 {
 	struct bfq_queue *bfqq = bfq_entity_to_bfqq(entity);
-	struct bfq_sched_data *sd;
 
 	if (bfqq != NULL) {
-		sd = entity->sched_data;
 		atomic_inc(&bfqq->ref);
 		bfq_log_bfqq(bfqq->bfqd, bfqq, "get_entity: %p %d",
-			     bfqq, atomic_read(&bfqq->ref));
+			     bfqq, bfqq->ref);
 	}
 }
 
@@ -460,16 +478,14 @@ static void bfq_forget_entity(struct bfq_service_tree *st,
 			      struct bfq_entity *entity)
 {
 	struct bfq_queue *bfqq = bfq_entity_to_bfqq(entity);
-	struct bfq_sched_data *sd;
 
 	BUG_ON(!entity->on_st);
 
 	entity->on_st = 0;
 	st->wsum -= entity->weight;
 	if (bfqq != NULL) {
-		sd = entity->sched_data;
 		bfq_log_bfqq(bfqq->bfqd, bfqq, "forget_entity: %p %d",
-			     bfqq, atomic_read(&bfqq->ref));
+			     bfqq, bfqq->ref);
 		bfq_put_queue(bfqq);
 	}
 }
@@ -575,7 +591,7 @@ static void bfq_bfqq_served(struct bfq_queue *bfqq, unsigned long served)
 		st = bfq_entity_service_tree(entity);
 
 		entity->service += served;
-		WARN_ON_ONCE(entity->service > entity->budget);
+		BUG_ON(entity->service > entity->budget);
 		BUG_ON(st->wsum == 0);
 
 		st->vtime += bfq_delta(served, st->wsum);
@@ -857,9 +873,10 @@ left:
  * Update the virtual time in @st and return the first eligible entity
  * it contains.
  */
-static struct bfq_entity *__bfq_lookup_next_entity(struct bfq_service_tree *st)
+static struct bfq_entity *__bfq_lookup_next_entity(struct bfq_service_tree *st,
+						   bool force)
 {
-	struct bfq_entity *entity;
+	struct bfq_entity *entity, *new_next_active = NULL;
 
 	if (RB_EMPTY_ROOT(&st->active))
 		return NULL;
@@ -867,6 +884,17 @@ static struct bfq_entity *__bfq_lookup_next_entity(struct bfq_service_tree *st)
 	bfq_update_vtime(st);
 	entity = bfq_first_active_entity(st);
 	BUG_ON(bfq_gt(entity->start, st->vtime));
+
+	/*
+	 * If the chosen entity does not match with the sched_data's
+	 * next_active and we are forcedly serving the IDLE priority
+	 * class tree, bubble up budget update.
+	 */
+	if (unlikely(force && entity != entity->sched_data->next_active)) {
+		new_next_active = entity;
+		for_each_entity(new_next_active)
+			bfq_update_budget(new_next_active);
+	}
 
 	return entity;
 }
@@ -894,7 +922,7 @@ static struct bfq_entity *bfq_lookup_next_entity(struct bfq_sched_data *sd,
 
 	if (bfqd != NULL &&
 	    jiffies - bfqd->bfq_class_idle_last_service > BFQ_CL_IDLE_TIMEOUT) {
-		entity = __bfq_lookup_next_entity(st + BFQ_IOPRIO_CLASSES - 1);
+		entity = __bfq_lookup_next_entity(st + BFQ_IOPRIO_CLASSES - 1, true);
 		if (entity != NULL) {
 			i = BFQ_IOPRIO_CLASSES - 1;
 			bfqd->bfq_class_idle_last_service = jiffies;
@@ -902,7 +930,7 @@ static struct bfq_entity *bfq_lookup_next_entity(struct bfq_sched_data *sd,
 		}
 	}
 	for (; i < BFQ_IOPRIO_CLASSES; i++) {
-		entity = __bfq_lookup_next_entity(st + i);
+		entity = __bfq_lookup_next_entity(st + i, false);
 		if (entity != NULL) {
 			if (extract) {
 				bfq_check_next_active(sd, entity);
@@ -961,6 +989,7 @@ static void bfq_get_next_queue_forced(struct bfq_data *bfqd,
 	*/
 	for_each_entity(entity) {
 		sd = entity->sched_data;
+		bfq_update_budget(entity);
 		bfq_update_vtime(bfq_entity_service_tree(entity));
 		bfq_active_extract(bfq_entity_service_tree(entity), entity);
 		sd->active_entity = entity;
