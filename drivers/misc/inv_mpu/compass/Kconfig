@@ -1,0 +1,21 @@
+menuconfig INV_SENSORS_COMPASS
+	bool "Compass Slave Sensors"
+	default y
+	---help---
+	  Say Y here to get to see options for device drivers for various
+	  compasses. This option alone does not add any kernel code.
+
+	  If you say N, all options in this submenu will be skipped and disabled.
+
+if INV_SENSORS_COMPASS
+
+config MPU_SENSORS_AMI304
+	tristate "Aichi Steel ami30X"
+	help
+	  This enables support for the Aichi Steel ami304/ami305 compass
+	  This support is for integration with the MPU3050 or MPU6050 gyroscope
+	  device driver.  Only one compass can be registered at a time.
+	  Specifying more that one compass in the board file will result
+	  in runtime errors.
+
+endif

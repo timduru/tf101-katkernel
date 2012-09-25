@@ -1,0 +1,23 @@
+menuconfig INV_SENSORS_ACCELEROMETERS
+	bool "Accelerometer Slave Sensors"
+	default y
+	---help---
+	  Say Y here to get to see options for device drivers for various
+	  accelerometrs for integration with the MPU3050 or MPU6050 driver.
+	  This option alone does not add any kernel code.
+
+	  If you say N, all options in this submenu will be skipped and disabled.
+
+if INV_SENSORS_ACCELEROMETERS
+
+config MPU_SENSORS_KXTF9
+	tristate "Kionix KXTF9"
+	depends on MPU_SENSORS_MPU3050 || MPU_SENSORS_MPU6050B1 || MPU_SENSORS_MPU6050A2
+	help
+	  This enables support for the Kionix KXFT9 accelerometer
+	  This support is for integration with the MPU3050 gyroscope device
+	  driver.  Only one accelerometer can be registered at a time.
+	  Specifying more that one accelerometer in the board file will result
+	  in runtime errors.
+
+endif
