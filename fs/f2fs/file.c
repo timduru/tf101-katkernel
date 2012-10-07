@@ -593,13 +593,7 @@ long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (ret)
 			return ret;
 
-		/*
-		 * kernel 2.6.35 still has is_owner_or_cap() while newer
-		 * kernels have renamed that to inode_owner_or_capable()
-		 * change back for now -- marc1706
-		 */
-		//if (!inode_owner_or_capable(inode)) {
-		if (!is_owner_or_cap(inode)) {
+		if (!inode_owner_or_capable(inode)) {
 			ret = -EACCES;
 			goto out;
 		}
