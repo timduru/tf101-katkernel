@@ -2801,7 +2801,7 @@ void shmem_set_file(struct vm_area_struct *vma, struct file *file)
 		fput(vma->vm_file);
 	vma->vm_file = file;
 	vma->vm_ops = &shmem_vm_ops;
-	vma->vm_flags |= VM_CAN_NONLINEAR;
+	//vma->vm_flags |= VM_CAN_NONLINEAR;
 }
 
 /**
@@ -2821,6 +2821,7 @@ int shmem_zero_setup(struct vm_area_struct *vma)
 /*TTTIM 	if (vma->vm_file)
 		fput(vma->vm_file);
 	vma->vm_file = file;
+<<<<<<< HEAD
 	vma->vm_ops = &shmem_vm_ops; */
 	return 0;
 }
