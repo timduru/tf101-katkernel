@@ -50,7 +50,11 @@
 #define GPIOKEYS_INFO(format, arg...)
 #endif
 
-static bool lidpatch_enabled = false;
+#if KEYBOARD_GPIO_LIDPATCH
+	static bool lidpatch_enabled = true;
+#else
+	static bool lidpatch_enabled = false;
+#endif
 
 #define GPIOKEYS_ERR(format, arg...)	\
 	printk(KERN_ERR "gpio-keys: [%s] " format , __FUNCTION__ , ## arg)
