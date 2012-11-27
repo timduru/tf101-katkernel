@@ -50,7 +50,7 @@
 #define GPIOKEYS_INFO(format, arg...)
 #endif
 
-#if KEYBOARD_GPIO_LIDPATCH
+#ifdef CONFIG_KEYBOARD_GPIO_LIDPATCH
 	static bool lidpatch_enabled = true;
 #else
 	static bool lidpatch_enabled = false;
