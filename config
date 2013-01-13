@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux/arm 2.6.39.4 Kernel Configuration
-# Mon Nov 26 03:34:06 2012
+# Sun Jan 13 14:14:10 2013
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -2728,8 +2728,9 @@ CONFIG_SENSORS_ISL29018=y
 #
 # Triggers - standalone
 #
-# CONFIG_XVMALLOC is not set
-# CONFIG_ZRAM is not set
+CONFIG_XVMALLOC=y
+CONFIG_ZRAM=y
+# CONFIG_ZRAM_DEBUG is not set
 # CONFIG_FB_SM7XX is not set
 # CONFIG_VIDEO_DT3155 is not set
 # CONFIG_CRYSTALHD is not set
@@ -3195,6 +3196,8 @@ CONFIG_CRC32_SLICEBY8=y
 CONFIG_LIBCRC32C=y
 CONFIG_ZLIB_INFLATE=y
 CONFIG_ZLIB_DEFLATE=y
+CONFIG_LZO_COMPRESS=y
+CONFIG_LZO_DECOMPRESS=y
 # CONFIG_XZ_DEC is not set
 # CONFIG_XZ_DEC_BCJ is not set
 CONFIG_DECOMPRESS_GZIP=y
