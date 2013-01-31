@@ -7,6 +7,8 @@
  * Copyright (C) 2008 Fabio Checconi <fabio@gandalf.sssup.it>
  *		      Paolo Valente <paolo.valente@unimore.it>
  *
+ * Copyright (C) 2010 Paolo Valente <paolo.valente@unimore.it>
+ *
  * Licensed under the GPL-2 as detailed in the accompanying COPYING.BFQ file.
  *
  * BFQ is a proportional share disk scheduling algorithm based on the
@@ -141,6 +143,8 @@ static DEFINE_IDA(cic_index_ida);
 #define RQ_CIC(rq)		\
 	((struct cfq_io_context *) (rq)->elevator_private[0])
 #define RQ_BFQQ(rq)		((rq)->elevator_private[1])
+
+static inline void bfq_schedule_dispatch(struct bfq_data *bfqd);
 
 #include "bfq-ioc.c"
 #include "bfq-sched.c"
@@ -497,9 +501,12 @@ static void bfq_add_rq_rb(struct request *rq)
 		 */
 		if(old_raising_coeff == 1 && (idle_for_long_time || soft_rt)) {
 			bfqq->raising_coeff = bfqd->bfq_raising_coeff;
-			bfqq->raising_cur_max_time = idle_for_long_time ?
-				bfq_wrais_duration(bfqd) :
-				bfqd->bfq_raising_rt_max_time;
+			if (idle_for_long_time)
+				bfqq->raising_cur_max_time =
+					bfq_wrais_duration(bfqd);
+			else
+				bfqq->raising_cur_max_time =
+					bfqd->bfq_raising_rt_max_time;
 			bfq_log_bfqq(bfqd, bfqq,
 				     "wrais starting at %llu msec,"
 				     "rais_max_time %u",
@@ -841,8 +848,10 @@ static struct bfq_queue *bfq_close_cooperator(struct bfq_data *bfqd,
  */
 static inline unsigned long bfq_max_budget(struct bfq_data *bfqd)
 {
-	return bfqd->budgets_assigned < 194 ? bfq_default_max_budget :
-		bfqd->bfq_max_budget;
+	if (bfqd->budgets_assigned < 194)
+		return bfq_default_max_budget;
+	else
+		return bfqd->bfq_max_budget;
 }
 
 /*
@@ -851,8 +860,10 @@ static inline unsigned long bfq_max_budget(struct bfq_data *bfqd)
  */
 static inline unsigned long bfq_min_budget(struct bfq_data *bfqd)
 {
-	return bfqd->budgets_assigned < 194 ? bfq_default_max_budget / 32 :
-		bfqd->bfq_max_budget / 32;
+	if (bfqd->budgets_assigned < 194)
+		return bfq_default_max_budget / 32;
+	else
+		return bfqd->bfq_max_budget / 32;
 }
 
 /*
@@ -928,9 +939,11 @@ static void bfq_arm_slice_timer(struct bfq_data *bfqd)
 static void bfq_set_budget_timeout(struct bfq_data *bfqd)
 {
 	struct bfq_queue *bfqq = bfqd->active_queue;
-	unsigned int timeout_coeff =
-		bfqq->raising_cur_max_time == bfqd->bfq_raising_rt_max_time ?
-		1 : (bfqq->entity.weight / bfqq->entity.orig_weight);
+	unsigned int timeout_coeff;
+	if (bfqq->raising_cur_max_time == bfqd->bfq_raising_rt_max_time)
+		timeout_coeff = 1;
+	else
+		timeout_coeff = bfqq->entity.weight / bfqq->entity.orig_weight;
 
 	bfqd->last_budget_start = ktime_get();
 
@@ -1241,7 +1254,10 @@ static int bfq_update_peak_rate(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 	if (!bfq_bfqq_sync(bfqq) || bfq_bfqq_budget_new(bfqq))
 		return 0;
 
-	delta = compensate ? bfqd->last_idling_start : ktime_get();
+	if (compensate)
+		delta = bfqd->last_idling_start;
+	else
+		delta = ktime_get();
 	delta = ktime_sub(delta, bfqd->last_budget_start);
 	usecs = ktime_to_us(delta);
 
@@ -2708,9 +2724,14 @@ static void *bfq_init_queue(struct request_queue *q)
 	bfqd->bfq_raising_min_inter_arr_async = msecs_to_jiffies(500);
 	bfqd->bfq_raising_max_softrt_rate = 7000;
 
-	bfqd->RT_prod = blk_queue_nonrot(bfqd->queue) ?
-		R_nonrot * T_nonrot : R_rot * T_rot;
-	bfqd->peak_rate = 1; /* to avoid divide-by-zero exceptions */
+	/* Initially estimate the device's peak rate as the reference rate */
+	if (blk_queue_nonrot(bfqd->queue)) {
+		bfqd->RT_prod = R_nonrot * T_nonrot;
+		bfqd->peak_rate = R_nonrot;
+	} else {
+		bfqd->RT_prod = R_rot * T_rot;
+		bfqd->peak_rate = R_rot;
+	}
 
 	return bfqd;
 }
@@ -2772,6 +2793,8 @@ static ssize_t bfq_weights_show(struct elevator_queue *e, char *page)
 	struct bfq_data *bfqd = e->elevator_data;
 	ssize_t num_char = 0;
 
+	spin_lock_irq(bfqd->queue->queue_lock);
+
 	num_char += sprintf(page + num_char, "Active:\n");
 	list_for_each_entry(bfqq, &bfqd->active_list, bfqq_list) {
 		num_char += sprintf(page + num_char,
@@ -2792,6 +2815,9 @@ static ssize_t bfq_weights_show(struct elevator_queue *e, char *page)
 					bfqq->last_rais_start_finish),
 				jiffies_to_msecs(bfqq->raising_cur_max_time));
 	}
+
+	spin_unlock_irq(bfqd->queue->queue_lock);
+
 	return num_char;
 }
 
