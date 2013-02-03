@@ -1275,8 +1275,6 @@ static int bfq_update_peak_rate(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 			 * new_rate = (7/8) * old_rate + (1/8) * bw
 			 */
 			do_div(bw, 8);
-			if (bw == 0)
-				return 0;
 			bfqd->peak_rate *= 7;
 			do_div(bfqd->peak_rate, 8);
 			bfqd->peak_rate += bw;
