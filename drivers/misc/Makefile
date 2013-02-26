@@ -58,3 +58,4 @@ obj-$(CONFIG_TEGRA_CRYPTO_DEV)	+= tegra-cryptodev.o
 obj-$(CONFIG_TEGRA_BB_SUPPORT)	+= tegra-baseband/
 obj-$(CONFIG_MAX1749_VIBRATOR)	+= max1749.o
 obj-$(CONFIG_KERNEL_RAMDUMP)    += ramdump.o
+obj-$(CONFIG_FSYNC_CONTROL)  += fsync_control.o
