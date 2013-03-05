@@ -443,6 +443,7 @@ static int fm34_suspend(struct i2c_client *client, pm_message_t mesg)
 static int fm34_resume(struct i2c_client *client)
 {
 	printk("fm34_resume+\n");
+	fm34_reconfig();
 	printk("fm34_resume-\n");
 	return 0;
 }
