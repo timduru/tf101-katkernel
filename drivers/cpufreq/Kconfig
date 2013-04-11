@@ -141,6 +141,13 @@ config CPU_FREQ_DEFAULT_GOV_SMARTASS2
 	help
 	  Use the CPUFreq governor 'smartassV2' as default.
 
+config CPU_FREQ_DEFAULT_GOV_SMOOTHASS
+	bool "smoothass"
+	select CPU_FREQ_GOV_SMOOTHASS
+	select CPU_FREQ_GOV_PERFORMANCE
+	help
+	  Use CPUFREQ smoothass as default.
+
 config CPU_FREQ_DEFAULT_GOV_WHEATLEY
 	bool "wheatley"
 	select CPU_FREQ_GOV_WHEATLEY
@@ -271,6 +278,12 @@ config CPU_FREQ_GOV_SMARTASS2
 	depends on CPU_FREQ
 	help
 	  'smartassV2' - a "smart" governor
+
+config CPU_FREQ_GOV_SMOOTHASS
+	tristate "'smoothass' governor"
+	depends on CPU_FREQ
+	help
+	  Slightly more aggressive smartass
 
 config CPU_FREQ_GOV_LAGFREE
         tristate "'lagfree' cpufreq governor"
