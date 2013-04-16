@@ -2299,8 +2299,8 @@ int asusec_suspend_hub_callback(void){
 			printk("retry i2c test\n");
 			//asusec_dock_init_work_function(1);
 			//asusec_resume(1);
-			////asusec_reset_dock();
-			////msleep(500);
+			//asusec_reset_dock();
+			msleep(500);
 			ret_val = asusec_i2c_test(ec_chip->client);
 		}
 		if(ret_val < 0){
