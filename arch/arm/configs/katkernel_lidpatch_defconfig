@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux/arm 2.6.39.4 Kernel Configuration
-# Thu Apr 11 10:52:34 2013
+# Wed Jul 31 15:31:36 2013
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -2543,6 +2543,7 @@ CONFIG_MMC_SDHCI_TEGRA=y
 # CONFIG_MMC_VIA_SDMMC is not set
 # CONFIG_MMC_DW is not set
 # CONFIG_MMC_USHC is not set
+CONFIG_MMC_SDHCI_NATIVE_BLOCKSIZE=y
 # CONFIG_MEMSTICK is not set
 # CONFIG_NEW_LEDS is not set
 # CONFIG_NFC_DEVICES is not set

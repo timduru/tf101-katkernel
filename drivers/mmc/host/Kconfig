@@ -548,3 +548,10 @@ config MMC_USHC
 
 	  Note: These controllers only support SDIO cards and do not
 	  support MMC or SD memory cards.
+
+config MMC_SDHCI_NATIVE_BLOCKSIZE	
+	bool "Use Host Controller's actual blocksize"	
+  	depends on MMC_SDHCI && EXPERIMENTAL	
+  	default y
+  	help	
+    	  Use the maximum blocksize supported by the hardware.
