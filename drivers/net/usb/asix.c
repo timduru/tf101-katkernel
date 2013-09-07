@@ -3412,6 +3412,10 @@ static const struct usb_device_id	products [] = {
 	USB_DEVICE (0x2001, 0x1a00),
 	.driver_info =  (unsigned long) &dlink_dub_e100_info,
 }, {
+	// DLink DUB-E100
+	USB_DEVICE (0x2001, 0x1a02),
+	.driver_info =  (unsigned long) &ax88772b_info,
+}, {
 	// DLink DUB-E100B
 	USB_DEVICE (0x2001, 0x3c05),
 	.driver_info =  (unsigned long) &dlink_dub_e100b_info,
