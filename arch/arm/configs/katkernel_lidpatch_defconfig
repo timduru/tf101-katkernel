@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux/arm 2.6.39.4 Kernel Configuration
-# Sat Sep  7 09:46:30 2013
+# Sat Sep 28 18:08:07 2013
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -610,7 +610,8 @@ CONFIG_INET_XFRM_MODE_TRANSPORT=y
 CONFIG_INET_XFRM_MODE_TUNNEL=y
 # CONFIG_INET_XFRM_MODE_BEET is not set
 # CONFIG_INET_LRO is not set
-# CONFIG_INET_DIAG is not set
+CONFIG_INET_DIAG=y
+CONFIG_INET_TCP_DIAG=y
 CONFIG_TCP_CONG_ADVANCED=y
 # CONFIG_TCP_CONG_BIC is not set
 CONFIG_TCP_CONG_CUBIC=y
@@ -2974,6 +2975,7 @@ CONFIG_NLS_ISO8859_1=y
 # CONFIG_NLS_KOI8_R is not set
 # CONFIG_NLS_KOI8_U is not set
 CONFIG_NLS_UTF8=y
+CONFIG_RESTRICT_ROOTFS_SLAVE=y
 
 #
 # Kernel hacking
