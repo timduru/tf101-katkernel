@@ -109,7 +109,7 @@ do {									\
 #else				/* !(WL_DBG_LEVEL > 0) */
 #define	WL_DBG(args)
 #endif				/* (WL_DBG_LEVEL > 0) */
-
+#define	WL_PNO(args)
 
 #define WL_SCAN_RETRY_MAX	3	/* used for ibss scan */
 #define WL_NUM_PMKIDS_MAX	MAXPMKID	/* will be used
