@@ -2257,6 +2257,8 @@ EXPORT_SYMBOL(asusec_open_keyboard);
 int asusec_close_keyboard(void){
 	int ret_val;
 
+ASUSEC_NOTICE("TTTim force open\n");
+return asusec_open_keyboard();
 	if (ec_chip->status == 0){
 		return 0;
 	} else if ((ec_chip->suspend_state == 0) && (ec_chip->op_mode == 0)){
