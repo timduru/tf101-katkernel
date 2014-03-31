@@ -726,6 +726,7 @@ static inline int compare_keys(struct rtable *rt1, struct rtable *rt2)
 		(rt1->rt_mark ^ rt2->rt_mark) |
 		(rt1->rt_tos ^ rt2->rt_tos) |
 		(rt1->rt_oif ^ rt2->rt_oif) |
+		(rt1->rt_uid ^ rt2->rt_uid) |
 		(rt1->rt_iif ^ rt2->rt_iif)) == 0;
 }
 
@@ -1707,14 +1708,18 @@ void ip_rt_get_source(u8 *addr, struct rtable *rt)
 	if (rt_is_output_route(rt))
 		src = rt->rt_src;
 	else {
-		struct flowi4 fl4 = {
-			.daddr = rt->rt_key_dst,
-			.saddr = rt->rt_key_src,
-			.flowi4_tos = rt->rt_tos,
-			.flowi4_oif = rt->rt_oif,
-			.flowi4_iif = rt->rt_iif,
-			.flowi4_mark = rt->rt_mark,
-		};
+		struct fib_result res;
+
+
+               struct flowi4 fl4 = {
+                       .daddr = rt->rt_key_dst,
+                       .saddr = rt->rt_key_src,
+                       .flowi4_tos = rt->rt_tos,
+                       .flowi4_oif = rt->rt_oif,
+                       .flowi4_iif = rt->rt_iif,
+                       .flowi4_mark = rt->rt_mark,
+		       .flowi4_uid = /*skb->sk ? sock_i_uid(skb->sk) :*/ 0
+               };
 
 		rcu_read_lock();
 		if (fib_lookup(dev_net(rt->dst.dev), &fl4, &res) == 0)
@@ -1896,6 +1901,7 @@ static int ip_route_input_mc(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	rth->dst.dev	= init_net.loopback_dev;
 	dev_hold(rth->dst.dev);
 	rth->rt_oif	= 0;
+	rth->rt_uid	= 0;
 	rth->rt_gateway	= daddr;
 	rth->rt_spec_dst= spec_dst;
 	rth->rt_genid	= rt_genid(dev_net(dev));
@@ -2030,6 +2036,7 @@ static int __mkroute_input(struct sk_buff *skb,
 	rth->dst.dev	= (out_dev)->dev;
 	dev_hold(rth->dst.dev);
 	rth->rt_oif 	= 0;
+	rth->rt_uid	= 0;
 	rth->rt_spec_dst= spec_dst;
 
 	rth->dst.input = ip_forward;
@@ -2206,6 +2213,7 @@ local_input:
 	rth->rt_iif	= dev->ifindex;
 	rth->dst.dev	= net->loopback_dev;
 	dev_hold(rth->dst.dev);
+	rth->rt_uid	= 0;
 	rth->rt_gateway	= daddr;
 	rth->rt_spec_dst= spec_dst;
 	rth->dst.input= ip_local_deliver;
@@ -2408,6 +2416,7 @@ static struct rtable *__mkroute_output(const struct fib_result *res,
 	   cache entry */
 	rth->dst.dev	= dev_out;
 	dev_hold(dev_out);
+	rth->rt_uid	= fl4->flowi4_uid;
 	rth->rt_gateway = fl4->daddr;
 	rth->rt_spec_dst= fl4->saddr;
 
@@ -2656,6 +2665,7 @@ struct rtable *__ip_route_output_key(struct net *net, const struct flowi4 *flp4)
 		    rt_is_output_route(rth) &&
 		    rth->rt_oif == flp4->flowi4_oif &&
 		    rth->rt_mark == flp4->flowi4_mark &&
+		    rth->rt_uid == flp4->flowi4_uid &&
 		    !((rth->rt_tos ^ flp4->flowi4_tos) &
 			    (IPTOS_RT_MASK | RTO_ONLINK)) &&
 		    net_eq(dev_net(rth->dst.dev), net) &&
@@ -2729,6 +2739,7 @@ struct dst_entry *ipv4_blackhole_route(struct net *net, struct dst_entry *dst_or
 		rt->rt_iif = ort->rt_iif;
 		rt->rt_oif = ort->rt_oif;
 		rt->rt_mark = ort->rt_mark;
+		rt->rt_uid = ort->rt_uid;
 
 		rt->rt_genid = rt_genid(net);
 		rt->rt_flags = ort->rt_flags;
@@ -2827,6 +2838,9 @@ static int rt_fill_info(struct net *net,
 
 	if (rt->rt_mark)
 		NLA_PUT_BE32(skb, RTA_MARK, rt->rt_mark);
+
+	if (rt->rt_uid != (uid_t) -1)
+		NLA_PUT_BE32(skb, RTA_UID, rt->rt_uid);
 
 	error = rt->dst.error;
 	expires = (rt->peer && rt->peer->pmtu_expires) ?
@@ -2940,6 +2954,7 @@ static int inet_rtm_getroute(struct sk_buff *in_skb, struct nlmsghdr* nlh, void 
 			.flowi4_tos = rtm->rtm_tos,
 			.flowi4_oif = tb[RTA_OIF] ? nla_get_u32(tb[RTA_OIF]) : 0,
 			.flowi4_mark = mark,
+			.flowi4_uid = tb[RTA_UID] ? nla_get_u32(tb[RTA_UID]) : current_uid(),
 		};
 		rt = ip_route_output_key(net, &fl4);
 
