@@ -201,8 +201,8 @@ static struct super_operations f2fs_sops = {
 	.destroy_inode	= f2fs_destroy_inode,
 	.write_inode	= f2fs_write_inode,
 	.show_options	= f2fs_show_options,
-//	.evict_inode	= f2fs_evict_inode,
-	.delete_inode	= f2fs_evict_inode,
+	.evict_inode	= f2fs_evict_inode,
+//	.delete_inode	= f2fs_evict_inode,
 	.put_super	= f2fs_put_super,
 	.sync_fs	= f2fs_sync_fs,
 	.statfs		= f2fs_statfs,
@@ -253,6 +253,7 @@ static int parse_options(struct f2fs_sb_info *sbi, char *options)
 			break;
 #endif
 		default:
+			pr_err("Unrecognized mount option \"%s\" or missing value\n", p);
 			return -EINVAL;
 		}
 	}
@@ -498,14 +499,14 @@ free_sbi:
 static int f2fs_mount(struct file_system_type *fs_type, int flags,
 			const char *dev_name, void *data, struct vfsmount *mnt)
 {
-	//return mount_bdev(fs_type, flags, dev_name, data, f2fs_fill_super);
-	return get_sb_bdev(fs_type, flags, dev_name, data, f2fs_fill_super, mnt);
+	return mount_bdev(fs_type, flags, dev_name, data, f2fs_fill_super);
+	//return get_sb_bdev(fs_type, flags, dev_name, data, f2fs_fill_super, mnt);
 }
 
 static struct file_system_type f2fs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "f2fs",
-	.get_sb		= f2fs_mount,
+	.mount		= f2fs_mount,
 	.kill_sb	= kill_block_super,
 	.fs_flags	= FS_REQUIRES_DEV,
 };

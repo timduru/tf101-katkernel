@@ -684,7 +684,7 @@ static void do_submit_bio(struct f2fs_sb_info *sbi,
 	 * -- marc1706
 	 */
 	if (type >= META_FLUSH)
-		rw = WRITE_BARRIER;
+		rw = WRITE_FLUSH_FUA;
 
 	if (sbi->bio[btype]) {
 		struct bio_private *p = sbi->bio[btype]->bi_private;
