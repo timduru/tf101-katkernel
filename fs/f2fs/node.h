@@ -1,4 +1,4 @@
-/*
+/**
  * fs/f2fs/node.h
  *
  * Copyright (c) 2012 Samsung Electronics Co., Ltd.
@@ -8,45 +8,37 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-/* start node id of a node block dedicated to the given node id */
 #define	START_NID(nid) ((nid / NAT_ENTRY_PER_BLOCK) * NAT_ENTRY_PER_BLOCK)
-
-/* node block offset on the NAT area dedicated to the given start node id */
 #define	NAT_BLOCK_OFFSET(start_nid) (start_nid / NAT_ENTRY_PER_BLOCK)
 
-/* # of pages to perform readahead before building free nids */
 #define FREE_NID_PAGES 4
-
-/* maximum # of free node ids to produce during build_free_nids */
 #define MAX_FREE_NIDS (NAT_ENTRY_PER_BLOCK * FREE_NID_PAGES)
 
-/* maximum readahead size for node during getting data blocks */
-#define MAX_RA_NODE		128
-
-/* maximum cached nat entries to manage memory footprint */
+#define MAX_RA_NODE		128	/* Max. readahead size for node */
 #define NM_WOUT_THRESHOLD	(64 * NAT_ENTRY_PER_BLOCK)
-
-/* vector size for gang look-up from nat cache that consists of radix tree */
 #define NATVEC_SIZE	64
 
-/* return value for read_node_page */
-#define LOCKED_PAGE	1
-
-/*
+/**
  * For node information
  */
 struct node_info {
-	nid_t nid;		/* node id */
-	nid_t ino;		/* inode number of the node's owner */
+	nid_t nid;	/* node id */
+	nid_t ino;	/* inode number of the node's owner */
 	block_t	blk_addr;	/* block address of the node */
 	unsigned char version;	/* version of the node */
-};
+} __packed;
+
+static inline unsigned char inc_node_version(unsigned char version)
+{
+	(version == 255) ? version = 0 : ++version;
+	return version;
+}
 
 struct nat_entry {
-	struct list_head list;	/* for clean or dirty nat list */
-	bool checkpointed;	/* whether it is checkpointed or not */
-	struct node_info ni;	/* in-memory node information */
-};
+	struct node_info ni;
+	bool checkpointed;
+	struct list_head list;	/* clean/dirty list */
+} __packed;
 
 #define nat_get_nid(nat)		(nat->ni.nid)
 #define nat_set_nid(nat, n)		(nat->ni.nid = n)
@@ -56,12 +48,10 @@ struct nat_entry {
 #define nat_set_ino(nat, i)		(nat->ni.ino = i)
 #define nat_get_version(nat)		(nat->ni.version)
 #define nat_set_version(nat, v)		(nat->ni.version = v)
-
-#define __set_nat_cache_dirty(nm_i, ne)					\
+#define __set_nat_cache_dirty(nm_i, ne)				\
 	list_move_tail(&ne->list, &nm_i->dirty_nat_entries);
 #define __clear_nat_cache_dirty(nm_i, ne)				\
 	list_move_tail(&ne->list, &nm_i->nat_entries);
-#define inc_node_version(version)	(++version)
 
 static inline void node_info_from_raw_nat(struct node_info *ni,
 						struct f2fs_nat_entry *raw_ne)
@@ -71,18 +61,18 @@ static inline void node_info_from_raw_nat(struct node_info *ni,
 	ni->version = raw_ne->version;
 }
 
-/*
+/**
  * For free nid mangement
  */
 enum nid_state {
-	NID_NEW,	/* newly added to free nid list */
-	NID_ALLOC	/* it is allocated */
+	NID_NEW,
+	NID_ALLOC
 };
 
 struct free_nid {
-	struct list_head list;	/* for free node id list */
-	nid_t nid;		/* node id */
-	int state;		/* in use or not: NID_NEW or NID_ALLOC */
+	nid_t nid;
+	int state;
+	struct list_head list;
 };
 
 static inline int next_free_nid(struct f2fs_sb_info *sbi, nid_t *nid)
@@ -99,7 +89,7 @@ static inline int next_free_nid(struct f2fs_sb_info *sbi, nid_t *nid)
 	return 0;
 }
 
-/*
+/**
  * inline functions
  */
 static inline void get_nat_bitmap(struct f2fs_sb_info *sbi, void *addr)
@@ -161,7 +151,7 @@ static inline void fill_node_footer(struct page *page, nid_t nid,
 		memset(rn, 0, sizeof(*rn));
 	rn->footer.nid = cpu_to_le32(nid);
 	rn->footer.ino = cpu_to_le32(ino);
-	rn->footer.flag = cpu_to_le32(ofs << OFFSET_BIT_SHIFT);
+	rn->footer.offset = cpu_to_le32(ofs);
 }
 
 static inline void copy_node_footer(struct page *dst, struct page *src)
@@ -180,7 +170,38 @@ static inline void fill_node_footer_blkaddr(struct page *page, block_t blkaddr)
 	void *kaddr = page_address(page);
 	struct f2fs_node *rn = (struct f2fs_node *)kaddr;
 	rn->footer.cp_ver = ckpt->checkpoint_ver;
-	rn->footer.next_blkaddr = cpu_to_le32(blkaddr);
+	rn->footer.next_blkaddr = blkaddr;
+}
+
+static inline void set_next_scan_nid(struct f2fs_nm_info *nm_i, int nid)
+{
+	spin_lock(&nm_i->stat_lock);
+	nm_i->next_scan_nid = nid;
+	spin_unlock(&nm_i->stat_lock);
+}
+
+static inline nid_t get_next_scan_nid(struct f2fs_nm_info *nm_i)
+{
+	nid_t nid;
+	spin_lock(&nm_i->stat_lock);
+	nid = nm_i->next_scan_nid;
+	spin_unlock(&nm_i->stat_lock);
+	return nid;
+}
+
+static inline unsigned char is_fsync_dnode(struct page *node_page)
+{
+	void *kaddr = page_address(node_page);
+	struct f2fs_node *raw_node = (struct f2fs_node *)kaddr;
+	return raw_node->footer.fsync;
+}
+
+static inline unsigned char is_dent_dnode(struct page *node_page)
+{
+	void *kaddr = page_address(node_page);
+	struct f2fs_node *raw_node = (struct f2fs_node *)kaddr;
+	unsigned char dent = raw_node->footer.dentry;
+	return dent;
 }
 
 static inline nid_t ino_of_node(struct page *node_page)
@@ -201,8 +222,7 @@ static inline unsigned int ofs_of_node(struct page *node_page)
 {
 	void *kaddr = page_address(node_page);
 	struct f2fs_node *rn = (struct f2fs_node *)kaddr;
-	unsigned flag = le32_to_cpu(rn->footer.flag);
-	return flag >> OFFSET_BIT_SHIFT;
+	return le32_to_cpu(rn->footer.offset);
 }
 
 static inline unsigned long long cpver_of_node(struct page *node_page)
@@ -219,21 +239,6 @@ static inline block_t next_blkaddr_of_node(struct page *node_page)
 	return le32_to_cpu(rn->footer.next_blkaddr);
 }
 
-/*
- * f2fs assigns the following node offsets described as (num).
- * N = NIDS_PER_BLOCK
- *
- *  Inode block (0)
- *    |- direct node (1)
- *    |- direct node (2)
- *    |- indirect node (3)
- *    |            `- direct node (4 => 4 + N - 1)
- *    |- indirect node (4 + N)
- *    |            `- direct node (5 + N => 5 + 2N - 1)
- *    `- double indirect node (5 + 2N)
- *                 `- indirect node (6 + 2N)
- *                       `- direct node (x(N + 1))
- */
 static inline bool IS_DNODE(struct page *node_page)
 {
 	unsigned int ofs = ofs_of_node(node_page);
@@ -242,7 +247,7 @@ static inline bool IS_DNODE(struct page *node_page)
 		return false;
 	if (ofs >= 6 + 2 * NIDS_PER_BLOCK) {
 		ofs -= 6 + 2 * NIDS_PER_BLOCK;
-		if (!((long int)ofs % (NIDS_PER_BLOCK + 1)))
+		if ((long int)ofs % (NIDS_PER_BLOCK + 1))
 			return false;
 	}
 	return true;
@@ -269,33 +274,16 @@ static inline nid_t get_nid(struct page *p, int off, bool i)
 	return le32_to_cpu(rn->in.nid[off]);
 }
 
-/*
+/**
  * Coldness identification:
  *  - Mark cold files in f2fs_inode_info
  *  - Mark cold node blocks in their node footer
  *  - Mark cold data pages in page cache
  */
-static inline int is_file(struct inode *inode, int type)
+static inline int is_cold_file(struct inode *inode)
 {
-	return F2FS_I(inode)->i_advise & type;
+	return F2FS_I(inode)->is_cold;
 }
-
-static inline void set_file(struct inode *inode, int type)
-{
-	F2FS_I(inode)->i_advise |= type;
-}
-
-static inline void clear_file(struct inode *inode, int type)
-{
-	F2FS_I(inode)->i_advise &= ~type;
-}
-
-#define file_is_cold(inode)	is_file(inode, FADVISE_COLD_BIT)
-#define file_wrong_pino(inode)	is_file(inode, FADVISE_LOST_PINO_BIT)
-#define file_set_cold(inode)	set_file(inode, FADVISE_COLD_BIT)
-#define file_lost_pino(inode)	set_file(inode, FADVISE_LOST_PINO_BIT)
-#define file_clear_cold(inode)	clear_file(inode, FADVISE_COLD_BIT)
-#define file_got_pino(inode)	clear_file(inode, FADVISE_LOST_PINO_BIT)
 
 static inline int is_cold_data(struct page *page)
 {
@@ -312,38 +300,32 @@ static inline void clear_cold_data(struct page *page)
 	ClearPageChecked(page);
 }
 
-static inline int is_node(struct page *page, int type)
+static inline int is_cold_node(struct page *page)
 {
 	void *kaddr = page_address(page);
 	struct f2fs_node *rn = (struct f2fs_node *)kaddr;
-	return le32_to_cpu(rn->footer.flag) & (1 << type);
+	return rn->footer.cold;
 }
-
-#define is_cold_node(page)	is_node(page, COLD_BIT_SHIFT)
-#define is_fsync_dnode(page)	is_node(page, FSYNC_BIT_SHIFT)
-#define is_dent_dnode(page)	is_node(page, DENT_BIT_SHIFT)
 
 static inline void set_cold_node(struct inode *inode, struct page *page)
 {
 	struct f2fs_node *rn = (struct f2fs_node *)page_address(page);
-	unsigned int flag = le32_to_cpu(rn->footer.flag);
-
 	if (S_ISDIR(inode->i_mode))
-		flag &= ~(0x1 << COLD_BIT_SHIFT);
+		rn->footer.cold = 0;
 	else
-		flag |= (0x1 << COLD_BIT_SHIFT);
-	rn->footer.flag = cpu_to_le32(flag);
+		rn->footer.cold = 1;
 }
 
-static inline void set_mark(struct page *page, int mark, int type)
+static inline void set_fsync_mark(struct page *page, int mark)
 {
-	struct f2fs_node *rn = (struct f2fs_node *)page_address(page);
-	unsigned int flag = le32_to_cpu(rn->footer.flag);
-	if (mark)
-		flag |= (0x1 << type);
-	else
-		flag &= ~(0x1 << type);
-	rn->footer.flag = cpu_to_le32(flag);
+	void *kaddr = page_address(page);
+	struct f2fs_node *rn = (struct f2fs_node *)kaddr;
+	rn->footer.fsync = mark;
 }
-#define set_dentry_mark(page, mark)	set_mark(page, mark, DENT_BIT_SHIFT)
-#define set_fsync_mark(page, mark)	set_mark(page, mark, FSYNC_BIT_SHIFT)
+
+static inline void set_dentry_mark(struct page *page, int mark)
+{
+	void *kaddr = page_address(page);
+	struct f2fs_node *rn = (struct f2fs_node *)kaddr;
+	rn->footer.dentry = mark;
+}

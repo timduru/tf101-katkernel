@@ -1,4 +1,4 @@
-/*
+/**
  * fs/f2fs/xattr.c
  *
  * Copyright (c) 2012 Samsung Electronics Co., Ltd.
@@ -6,12 +6,12 @@
  *
  * Portions of this code from linux/fs/ext2/xattr.c
  *
- * Copyright (C) 2001-2003 Andreas Gruenbacher <agruen@suse.de>
+ * Copyright (C) 2001-2003 Andreas Gruenbacher <agruen@xxxxxxx>
  *
- * Fix by Harrison Xing <harrison@mountainviewdata.com>.
+ * Fix by Harrison Xing <harrison@xxxxxxxxxxxxxxxxxxxx>.
  * Extended attributes for symlinks and special files added per
- *  suggestion of Luka Renko <luka.renko@hermes.si>.
- * xattr consolidation Copyright (c) 2004 James Morris <jmorris@redhat.com>,
+ *  suggestion of Luka Renko <luka.renko@xxxxxxxxx>.
+ * xattr consolidation Copyright (c) 2004 James Morris <jmorris@xxxxxxxxxx>,
  *  Red Hat Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -103,29 +103,28 @@ static int f2fs_xattr_generic_set(struct dentry *dentry, const char *name,
 }
 
 const struct xattr_handler f2fs_xattr_user_handler = {
-	.prefix	= XATTR_USER_PREFIX,
+	.prefix = XATTR_USER_PREFIX,
 	.flags	= F2FS_XATTR_INDEX_USER,
-	.list	= f2fs_xattr_generic_list,
-	.get	= f2fs_xattr_generic_get,
-	.set	= f2fs_xattr_generic_set,
+	.list   = f2fs_xattr_generic_list,
+	.get    = f2fs_xattr_generic_get,
+	.set    = f2fs_xattr_generic_set,
 };
 
 const struct xattr_handler f2fs_xattr_trusted_handler = {
-	.prefix	= XATTR_TRUSTED_PREFIX,
+	.prefix = XATTR_TRUSTED_PREFIX,
 	.flags	= F2FS_XATTR_INDEX_TRUSTED,
-	.list	= f2fs_xattr_generic_list,
-	.get	= f2fs_xattr_generic_get,
-	.set	= f2fs_xattr_generic_set,
+	.list   = f2fs_xattr_generic_list,
+	.get    = f2fs_xattr_generic_get,
+	.set    = f2fs_xattr_generic_set,
 };
 
 static const struct xattr_handler *f2fs_xattr_handler_map[] = {
-	[F2FS_XATTR_INDEX_USER] = &f2fs_xattr_user_handler,
+	[F2FS_XATTR_INDEX_USER]              = &f2fs_xattr_user_handler,
 #ifdef CONFIG_F2FS_FS_POSIX_ACL
-	[F2FS_XATTR_INDEX_POSIX_ACL_ACCESS] = &f2fs_xattr_acl_access_handler,
+	[F2FS_XATTR_INDEX_POSIX_ACL_ACCESS]  = &f2fs_xattr_acl_access_handler,
 	[F2FS_XATTR_INDEX_POSIX_ACL_DEFAULT] = &f2fs_xattr_acl_default_handler,
 #endif
-	[F2FS_XATTR_INDEX_TRUSTED] = &f2fs_xattr_trusted_handler,
-	[F2FS_XATTR_INDEX_ADVISE] = &f2fs_xattr_advise_handler,
+	[F2FS_XATTR_INDEX_TRUSTED]           = &f2fs_xattr_trusted_handler,
 };
 
 const struct xattr_handler *f2fs_xattr_handlers[] = {
@@ -135,7 +134,6 @@ const struct xattr_handler *f2fs_xattr_handlers[] = {
 	&f2fs_xattr_acl_default_handler,
 #endif
 	&f2fs_xattr_trusted_handler,
-	&f2fs_xattr_advise_handler,
 	NULL,
 };
 
@@ -157,7 +155,7 @@ int f2fs_getxattr(struct inode *inode, int name_index, const char *name,
 	struct page *page;
 	void *base_addr;
 	int error = 0, found = 0;
-	size_t value_len, name_len;
+	int value_len, name_len;
 
 	if (name == NULL)
 		return -EINVAL;
@@ -167,8 +165,6 @@ int f2fs_getxattr(struct inode *inode, int name_index, const char *name,
 		return -ENODATA;
 
 	page = get_node_page(sbi, fi->i_xattr_nid);
-	if (IS_ERR(page))
-		return PTR_ERR(page);
 	base_addr = page_address(page);
 
 	list_for_each_xattr(entry, base_addr) {
@@ -219,8 +215,6 @@ ssize_t f2fs_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
 		return 0;
 
 	page = get_node_page(sbi, fi->i_xattr_nid);
-	if (IS_ERR(page))
-		return PTR_ERR(page);
 	base_addr = page_address(page);
 
 	list_for_each_xattr(entry, base_addr) {
@@ -257,33 +251,27 @@ int f2fs_setxattr(struct inode *inode, int name_index, const char *name,
 	struct f2fs_xattr_entry *here, *last;
 	struct page *page;
 	void *base_addr;
-	int error, found, free, newsize;
-	size_t name_len;
+	int error, found, free, name_len, newsize;
 	char *pval;
-	int ilock;
 
 	if (name == NULL)
 		return -EINVAL;
+	name_len = strlen(name);
 
 	if (value == NULL)
 		value_len = 0;
 
-	name_len = strlen(name);
-
-	if (name_len > F2FS_NAME_LEN || value_len > MAX_VALUE_LEN)
+	if (name_len > 255 || value_len > MAX_VALUE_LEN)
 		return -ERANGE;
 
-	f2fs_balance_fs(sbi);
-
-	ilock = mutex_lock_op(sbi);
-
+	mutex_lock_op(sbi, NODE_NEW);
 	if (!fi->i_xattr_nid) {
 		/* Allocate new attribute block */
 		struct dnode_of_data dn;
 
 		if (!alloc_nid(sbi, &fi->i_xattr_nid)) {
-			error = -ENOSPC;
-			goto exit;
+			mutex_unlock_op(sbi, NODE_NEW);
+			return -ENOSPC;
 		}
 		set_new_dnode(&dn, inode, NULL, NULL, fi->i_xattr_nid);
 		mark_inode_dirty(inode);
@@ -292,8 +280,8 @@ int f2fs_setxattr(struct inode *inode, int name_index, const char *name,
 		if (IS_ERR(page)) {
 			alloc_nid_failed(sbi, fi->i_xattr_nid);
 			fi->i_xattr_nid = 0;
-			error = PTR_ERR(page);
-			goto exit;
+			mutex_unlock_op(sbi, NODE_NEW);
+			return PTR_ERR(page);
 		}
 
 		alloc_nid_done(sbi, fi->i_xattr_nid);
@@ -305,8 +293,8 @@ int f2fs_setxattr(struct inode *inode, int name_index, const char *name,
 		/* The inode already has an extended attribute block. */
 		page = get_node_page(sbi, fi->i_xattr_nid);
 		if (IS_ERR(page)) {
-			error = PTR_ERR(page);
-			goto exit;
+			mutex_unlock_op(sbi, NODE_NEW);
+			return PTR_ERR(page);
 		}
 
 		base_addr = page_address(page);
@@ -385,16 +373,15 @@ int f2fs_setxattr(struct inode *inode, int name_index, const char *name,
 
 	if (is_inode_flag_set(fi, FI_ACL_MODE)) {
 		inode->i_mode = fi->i_acl_mode;
-		inode->i_ctime = CURRENT_TIME;
+		inode->i_ctime = CURRENT_TIME_SEC;
 		clear_inode_flag(fi, FI_ACL_MODE);
 	}
-	update_inode_page(inode);
-	mutex_unlock_op(sbi, ilock);
+	f2fs_write_inode(inode, NULL);
+	mutex_unlock_op(sbi, NODE_NEW);
 
 	return 0;
 cleanup:
 	f2fs_put_page(page, 1);
-exit:
-	mutex_unlock_op(sbi, ilock);
+	mutex_unlock_op(sbi, NODE_NEW);
 	return error;
 }

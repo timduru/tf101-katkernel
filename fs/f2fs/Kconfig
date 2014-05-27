@@ -1,6 +1,6 @@
 config F2FS_FS
 	tristate "F2FS filesystem support (EXPERIMENTAL)"
-	depends on BLOCK
+	depends on EXPERIMENTAL
 	help
 	  F2FS is based on Log-structured File System (LFS), which supports
 	  versatile "flash-friendly" features. The design has been focused on
@@ -16,16 +16,18 @@ config F2FS_FS
 
 config F2FS_STAT_FS
 	bool "F2FS Status Information"
-	depends on F2FS_FS && DEBUG_FS
+	depends on F2FS_FS
 	default y
 	help
-	  /sys/kernel/debug/f2fs/ contains information about all the partitions
-	  mounted as f2fs. Each file shows the whole f2fs information.
+	  /proc/fs/f2fs/ contains information about partitions mounted as f2fs.
+	  For each partition, a corresponding directory, named as its device
+	  name, is provided with the following proc entries.
 
-	  /sys/kernel/debug/f2fs/status includes:
-	    - major file system information managed by f2fs currently
-	    - average SIT information about whole segments
-	    - current memory footprint consumed by f2fs.
+	  f2fs_stat	major file system information managed by f2fs currently
+	  f2fs_sit_stat	average SIT information about whole segments
+	  f2fs_mem_stat	current memory footprint consumed by f2fs
+
+	  e.g., in /proc/fs/f2fs/sdb1/
 
 config F2FS_FS_XATTR
 	bool "F2FS extended attributes"

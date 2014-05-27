@@ -1,4 +1,4 @@
-/*
+/**
  * fs/f2fs/acl.h
  *
  * Copyright (c) 2012 Samsung Electronics Co., Ltd.
@@ -6,7 +6,7 @@
  *
  * Portions of this code from linux/fs/ext2/acl.h
  *
- * Copyright (C) 2001-2003 Andreas Gruenbacher, <agruen@suse.de>
+ * Copyright (C) 2001-2003 Andreas Gruenbacher, <agruen@xxxxxxx>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -37,6 +37,7 @@ struct f2fs_acl_header {
 #ifdef CONFIG_F2FS_FS_POSIX_ACL
 
 extern struct posix_acl *f2fs_get_acl(struct inode *inode, int type);
+extern int f2fs_check_acl(struct inode *inode, int mask);
 extern int f2fs_acl_chmod(struct inode *inode);
 extern int f2fs_init_acl(struct inode *inode, struct inode *dir);
 #else

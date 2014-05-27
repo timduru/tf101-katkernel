@@ -1,4 +1,4 @@
-/*
+/**
  * fs/f2fs/xattr.h
  *
  * Copyright (c) 2012 Samsung Electronics Co., Ltd.
@@ -8,7 +8,7 @@
  *
  * On-disk format of extended attributes for the ext2 filesystem.
  *
- * (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
+ * (C) 2001 Andreas Gruenbacher, <a.gruenbacher@xxxxxxxxxxxx>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -27,14 +27,12 @@
 #define F2FS_XATTR_REFCOUNT_MAX         1024
 
 /* Name indexes */
-#define F2FS_SYSTEM_ADVISE_PREFIX		"system.advise"
-#define F2FS_XATTR_INDEX_USER			1
-#define F2FS_XATTR_INDEX_POSIX_ACL_ACCESS	2
-#define F2FS_XATTR_INDEX_POSIX_ACL_DEFAULT	3
-#define F2FS_XATTR_INDEX_TRUSTED		4
-#define F2FS_XATTR_INDEX_LUSTRE			5
-#define F2FS_XATTR_INDEX_SECURITY		6
-#define F2FS_XATTR_INDEX_ADVISE			7
+#define F2FS_XATTR_INDEX_USER                   1
+#define F2FS_XATTR_INDEX_POSIX_ACL_ACCESS       2
+#define F2FS_XATTR_INDEX_POSIX_ACL_DEFAULT      3
+#define F2FS_XATTR_INDEX_TRUSTED                4
+#define F2FS_XATTR_INDEX_LUSTRE                 5
+#define F2FS_XATTR_INDEX_SECURITY               6
 
 struct f2fs_xattr_header {
 	__le32  h_magic;        /* magic number for identification */
@@ -77,7 +75,7 @@ struct f2fs_xattr_entry {
 #define MAX_VALUE_LEN	(MIN_OFFSET - sizeof(struct f2fs_xattr_header) - \
 			sizeof(struct f2fs_xattr_entry))
 
-/*
+/**
  * On-disk structure of f2fs_xattr
  * We use only 1 block for xattr.
  *
@@ -111,7 +109,6 @@ extern const struct xattr_handler f2fs_xattr_user_handler;
 extern const struct xattr_handler f2fs_xattr_trusted_handler;
 extern const struct xattr_handler f2fs_xattr_acl_access_handler;
 extern const struct xattr_handler f2fs_xattr_acl_default_handler;
-extern const struct xattr_handler f2fs_xattr_advise_handler;
 
 extern const struct xattr_handler *f2fs_xattr_handlers[];
 
