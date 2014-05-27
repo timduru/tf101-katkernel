@@ -2142,6 +2142,11 @@ extern int fs_may_remount_ro(struct super_block *);
  */
 #define bio_rw(bio)		((bio)->bi_rw & (RW_MASK | RWA_MASK))
 
+static inline struct inode *file_inode(struct file *f)
+{
+	return f->f_path.dentry->d_inode;
+}
+
 /*
  * return data direction, READ or WRITE
  */
@@ -2209,7 +2214,7 @@ static inline void put_write_access(struct inode * inode)
 static inline void allow_write_access(struct file *file)
 {
 	if (file)
-		atomic_inc(&file->f_path.dentry->d_inode->i_writecount);
+		atomic_inc(&file_inode(file)->i_writecount);
 }
 #ifdef CONFIG_IMA
 static inline void i_readcount_dec(struct inode *inode)
