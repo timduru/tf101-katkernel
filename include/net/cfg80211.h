@@ -1417,22 +1417,6 @@ struct cfg80211_ops {
  * @WIPHY_FLAG_IBSS_RSN: The device supports IBSS RSN.
  * @WIPHY_FLAG_SUPPORTS_SEPARATE_DEFAULT_KEYS: The device supports separate
  *	unicast and multicast TX keys.
- * @WIPHY_FLAG_MESH_AUTH: The device supports mesh authentication by routing
- *	auth frames to userspace. See @NL80211_MESH_SETUP_USERSPACE_AUTH.
- * @WIPHY_FLAG_SUPPORTS_SCHED_SCAN: The device supports scheduled scans.
- * @WIPHY_FLAG_SUPPORTS_FW_ROAM: The device supports roaming feature in the
- *	firmware.
- * @WIPHY_FLAG_AP_UAPSD: The device supports uapsd on AP.
- * @WIPHY_FLAG_SUPPORTS_TDLS: The device supports TDLS (802.11z) operation.
- * @WIPHY_FLAG_TDLS_EXTERNAL_SETUP: The device does not handle TDLS (802.11z)
- *	link setup/discovery operations internally. Setup, discovery and
- *	teardown packets should be sent through the @NL80211_CMD_TDLS_MGMT
- *	command. When this flag is not set, @NL80211_CMD_TDLS_OPER should be
- *	used for asking the driver/firmware to perform a TDLS operation.
- * @WIPHY_FLAG_HAVE_AP_SME: device integrates AP SME
- * @WIPHY_FLAG_REPORTS_OBSS: the device will report beacons from other BSSes
- *	when there are virtual interfaces in AP mode by calling
- *	cfg80211_report_obss_beacon().
  */
 enum wiphy_flags {
 	WIPHY_FLAG_CUSTOM_REGULATORY		= BIT(0),
@@ -1445,89 +1429,6 @@ enum wiphy_flags {
 	WIPHY_FLAG_CONTROL_PORT_PROTOCOL	= BIT(7),
 	WIPHY_FLAG_IBSS_RSN			= BIT(8),
 	WIPHY_FLAG_SUPPORTS_SEPARATE_DEFAULT_KEYS= BIT(9),
-	WIPHY_FLAG_MESH_AUTH			= BIT(10),
-	WIPHY_FLAG_SUPPORTS_SCHED_SCAN		= BIT(11),
-	WIPHY_FLAG_ENFORCE_COMBINATIONS		= BIT(12),
-	WIPHY_FLAG_SUPPORTS_FW_ROAM		= BIT(13),
-	WIPHY_FLAG_AP_UAPSD			= BIT(14),
-	WIPHY_FLAG_SUPPORTS_TDLS		= BIT(15),
-	WIPHY_FLAG_TDLS_EXTERNAL_SETUP		= BIT(16),
-	WIPHY_FLAG_HAVE_AP_SME			= BIT(17),
-	WIPHY_FLAG_REPORTS_OBSS			= BIT(18),
-};
-
-/**
- * struct ieee80211_iface_limit - limit on certain interface types
- * @max: maximum number of interfaces of these types
- * @types: interface types (bits)
- */
-struct ieee80211_iface_limit {
-	u16 max;
-	u16 types;
-};
-
-/**
- * struct ieee80211_iface_combination - possible interface combination
- * @limits: limits for the given interface types
- * @n_limits: number of limitations
- * @num_different_channels: can use up to this many different channels
- * @max_interfaces: maximum number of interfaces in total allowed in this
- *	group
- * @beacon_int_infra_match: In this combination, the beacon intervals
- *	between infrastructure and AP types must match. This is required
- *	only in special cases.
- *
- * These examples can be expressed as follows:
- *
- * Allow #STA <= 1, #AP <= 1, matching BI, channels = 1, 2 total:
- *
- *  struct ieee80211_iface_limit limits1[] = {
- *	{ .max = 1, .types = BIT(NL80211_IFTYPE_STATION), },
- *	{ .max = 1, .types = BIT(NL80211_IFTYPE_AP}, },
- *  };
- *  struct ieee80211_iface_combination combination1 = {
- *	.limits = limits1,
- *	.n_limits = ARRAY_SIZE(limits1),
- *	.max_interfaces = 2,
- *	.beacon_int_infra_match = true,
- *  };
- *
- *
- * Allow #{AP, P2P-GO} <= 8, channels = 1, 8 total:
- *
- *  struct ieee80211_iface_limit limits2[] = {
- *	{ .max = 8, .types = BIT(NL80211_IFTYPE_AP) |
- *			     BIT(NL80211_IFTYPE_P2P_GO), },
- *  };
- *  struct ieee80211_iface_combination combination2 = {
- *	.limits = limits2,
- *	.n_limits = ARRAY_SIZE(limits2),
- *	.max_interfaces = 8,
- *	.num_different_channels = 1,
- *  };
- *
- *
- * Allow #STA <= 1, #{P2P-client,P2P-GO} <= 3 on two channels, 4 total.
- * This allows for an infrastructure connection and three P2P connections.
- *
- *  struct ieee80211_iface_limit limits3[] = {
- *	{ .max = 1, .types = BIT(NL80211_IFTYPE_STATION), },
- *	{ .max = 3, .types = BIT(NL80211_IFTYPE_P2P_GO) |
- *			     BIT(NL80211_IFTYPE_P2P_CLIENT), },
- *  };
- *  struct ieee80211_iface_combination combination3 = {
- *	.limits = limits3,
- *	.n_limits = ARRAY_SIZE(limits3),
- *	.max_interfaces = 4,
- *	.num_different_channels = 2,
- *  };
- */
-struct ieee80211_iface_combination {
-	const struct ieee80211_iface_limit *limits;
-	u32 num_different_channels;
-	u16 max_interfaces;
-	u8 n_limits;
-	bool beacon_int_infra_match;
 };
 
 struct mac_address {
@@ -2695,7 +2596,6 @@ void cfg80211_connect_result(struct net_device *dev, const u8 *bssid,
  * cfg80211_roamed - notify cfg80211 of roaming
  *
  * @dev: network device
- * @channel: the channel of the new AP
  * @bssid: the BSSID of the new AP
  * @req_ie: association request IEs (maybe be %NULL)
  * @req_ie_len: association request IEs length
@@ -2706,9 +2606,7 @@ void cfg80211_connect_result(struct net_device *dev, const u8 *bssid,
  * It should be called by the underlying driver whenever it roamed
  * from one AP to another while connected.
  */
-void cfg80211_roamed(struct net_device *dev,
-		     struct ieee80211_channel *channel,
-		     const u8 *bssid,
+void cfg80211_roamed(struct net_device *dev, const u8 *bssid,
 		     const u8 *req_ie, size_t req_ie_len,
 		     const u8 *resp_ie, size_t resp_ie_len, gfp_t gfp);
 
