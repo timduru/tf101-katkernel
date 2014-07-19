@@ -379,23 +379,19 @@ int wl_android_wifi_off(struct net_device *dev)
 
 	printf("%s in\n", __FUNCTION__);
 	if (!dev) {
-		DHD_ERROR(("%s: dev is null\n", __FUNCTION__));
-		//return -EINVAL;
-                if (g_wifi_on) {
-                        sdioh_stop(NULL);
-                        dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
-                        g_wifi_on = 0;
-                }
-	} else {
-		dhd_net_if_lock(dev);
-		if (g_wifi_on) {
-			ret = dhd_dev_reset(dev, TRUE);
-			sdioh_stop(NULL);
-			dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
-			g_wifi_on = 0;
-		}
-		dhd_net_if_unlock(dev);
+		DHD_TRACE(("%s: dev is null\n", __FUNCTION__));
+		return -EINVAL;
 	}
+
+	dhd_net_if_lock(dev);
+	if (g_wifi_on) {
+		ret = dhd_dev_reset(dev, TRUE);
+		sdioh_stop(NULL);
+		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
+		g_wifi_on = 0;
+	}
+	dhd_net_if_unlock(dev);
+
 	return ret;
 }
 
@@ -562,10 +558,11 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		snprintf(command, 3, "OK");
 		bytes_written = strlen("OK");
 	}
+
 	if (bytes_written >= 0) {
-		if (bytes_written == 0)
+		if ((bytes_written == 0) && (priv_cmd.total_len > 0))
 			command[0] = '\0';
-		if (bytes_written > priv_cmd.total_len) {
+		if (bytes_written >= priv_cmd.total_len) {
 			DHD_ERROR(("%s: bytes_written = %d\n", __FUNCTION__, bytes_written));
 			bytes_written = priv_cmd.total_len;
 		} else {
@@ -576,7 +573,8 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 			DHD_ERROR(("%s: failed to copy data to user buffer\n", __FUNCTION__));
 			ret = -EFAULT;
 		}
-	} else {
+	}
+	else {
 		ret = bytes_written;
 	}
 
@@ -620,9 +618,7 @@ int wl_android_post_init(void)
 	char buf[IFNAMSIZ];
 	if (!dhd_download_fw_on_driverload) {
 		/* Call customer gpio to turn off power with WL_REG_ON signal */
-#if !defined(OOB_INTR_ONLY)
 		sdioh_stop(NULL);
-#endif /* !defined(OOB_INTR_ONLY) */
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
 		g_wifi_on = 0;
 	} else {
@@ -683,20 +679,21 @@ void wl_android_wifictrl_func_del(void)
 	}
 }
 
-void* wl_android_prealloc(int section, unsigned long size)
+void *wl_android_prealloc(int section, unsigned long size)
 {
 	void *alloc_ptr = NULL;
 	if (wifi_control_data && wifi_control_data->mem_prealloc) {
 		alloc_ptr = wifi_control_data->mem_prealloc(section, size);
 		if (alloc_ptr) {
 			DHD_INFO(("success alloc section %d\n", section));
-			bzero(alloc_ptr, size);
+			if (size != 0L)
+				bzero(alloc_ptr, size);
 			return alloc_ptr;
 		}
 	}
 
 	DHD_ERROR(("can't alloc section %d\n", section));
-	return 0;
+	return NULL;
 }
 
 int wifi_get_irq_number(unsigned long *irq_flags_ptr)

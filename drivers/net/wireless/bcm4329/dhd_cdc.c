@@ -111,7 +111,7 @@ dhdcdc_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len)
 }
 
 int
-dhdcdc_query_ioctl_old(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
+dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 {
 	dhd_prot_t *prot = dhd->prot;
 	cdc_ioctl_t *msg = &prot->msg;
@@ -195,7 +195,7 @@ done:
 }
 
 int
-dhdcdc_set_ioctl_old(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
+dhdcdc_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 {
 	dhd_prot_t *prot = dhd->prot;
 	cdc_ioctl_t *msg = &prot->msg;
@@ -241,36 +241,6 @@ dhdcdc_set_ioctl_old(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
 	}
 
 done:
-	return ret;
-}
-
-int
-dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
-{
-	int ret;
-
-	dhd_os_ioctl_block(dhd);
-
-	ret = dhdcdc_query_ioctl_old(dhd, ifidx, cmd, buf, len);
-	if (ret < 0)
-		dhd_os_check_hang(dhd, ifidx, ret);
-
-	dhd_os_ioctl_unblock(dhd);
-	return ret;
-}
-
-int
-dhdcdc_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len)
-{
-	int ret;
-
-	dhd_os_ioctl_block(dhd);
-
-	ret = dhdcdc_set_ioctl_old(dhd, ifidx, cmd, buf, len);
-	if (ret < 0)
-		dhd_os_check_hang(dhd, ifidx, ret);
-
-	dhd_os_ioctl_unblock(dhd);
 	return ret;
 }
 
