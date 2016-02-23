@@ -39,7 +39,7 @@
 /*
  * compiler option
  */
-#define GPIOKEYS_DEBUG			0
+#define GPIOKEYS_DEBUG			1
 /*
  * Debug Utility
  */
@@ -465,7 +465,8 @@ static int __devinit gpio_keys_setup_key(struct platform_device *pdev,
 	int irq, error;
 
 //lidpatch
-	if ( lidpatch_enabled && (button->type == EV_SW) && (ASUSGetProjectID() == 101) ) {
+	//if ( lidpatch_enabled && (button->type == EV_SW) && (ASUSGetProjectID() == 101) ) {
+	if ( lidpatch_enabled && (button->type == EV_SW)  ) {
 	button->active_low = 1;
 	}
 

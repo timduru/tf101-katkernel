@@ -208,12 +208,4 @@ extern uint32 bcmsdh_cur_sbwad(void *sdh);
 extern void bcmsdh_chipinfo(void *sdh, uint32 chip, uint32 chiprev);
 
 
-extern int bcmsdh_sleep(void *sdh, bool enab);
-
-/* GPIO support */
-extern int bcmsdh_gpio_init(void *sd);
-extern bool bcmsdh_gpioin(void *sd, uint32 gpio);
-extern int bcmsdh_gpioouten(void *sd, uint32 gpio);
-extern int bcmsdh_gpioout(void *sd, uint32 gpio, bool enab);
-
 #endif	/* _bcmsdh_h_ */

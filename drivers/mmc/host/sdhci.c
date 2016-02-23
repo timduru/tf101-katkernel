@@ -127,7 +127,8 @@ static void sdhci_set_card_detection(struct sdhci_host *host, bool enable)
 {
 	u32 irqs = SDHCI_INT_CARD_REMOVE | SDHCI_INT_CARD_INSERT;
 
-	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION)
+	if ((host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION) ||
+	    (host->mmc->caps & MMC_CAP_NONREMOVABLE))
 		return;
 
 	if (enable)
@@ -188,6 +189,11 @@ static void sdhci_reset(struct sdhci_host *host, u8 mask)
 
 	if (host->quirks & SDHCI_QUIRK_RESTORE_IRQS_AFTER_RESET)
 		sdhci_clear_set_irqs(host, SDHCI_INT_ALL_MASK, ier);
+
+	if (host->flags & (SDHCI_USE_SDMA | SDHCI_USE_ADMA)) {
+		if ((host->ops->enable_dma) && (mask & SDHCI_RESET_ALL))
+			host->ops->enable_dma(host);
+	}
 }
 
 static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios);
@@ -2172,8 +2178,9 @@ int sdhci_add_host(struct sdhci_host *host)
 	    mmc_card_is_removable(mmc))
 		mmc->caps |= MMC_CAP_NEEDS_POLL;
 
-	/* UHS-I mode(s) supported by the host controller. */
-	if (host->version >= SDHCI_SPEC_300)
+	/* Any UHS-I mode in caps implies SDR12 and SDR25 support. */
+	if (caps[1] & (SDHCI_SUPPORT_SDR104 | SDHCI_SUPPORT_SDR50 |
+		       SDHCI_SUPPORT_DDR50))
 		mmc->caps |= MMC_CAP_UHS_SDR12 | MMC_CAP_UHS_SDR25;
 
 	/* SDR104 supports also implies SDR50 support */

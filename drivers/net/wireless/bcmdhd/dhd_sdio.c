@@ -2213,7 +2213,7 @@ dhdsdio_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, const ch
 	int32 int_val = 0;
 	bool bool_val = 0;
 
-	DHD_TRACE(("%s: Enter, action %d name %s params %p plen %d arg %p len %d val_size %d\n",
+	DHD_ERROR(("%s: Enter, action %d name %s params %p plen %d arg %p len %d val_size %d\n",
 	           __FUNCTION__, actionid, name, params, plen, arg, len, val_size));
 
 	if ((bcmerror = bcm_iovar_lencheck(vi, arg, len, IOV_ISSET(actionid))) != 0)
@@ -5740,7 +5740,7 @@ dhdsdio_release_malloc(dhd_bus_t *bus, osl_t *osh)
 		return;
 
 	if (bus->rxbuf) {
-#ifndef DHD_USE_STATIC_BUF
+#ifndef CONFIG_DHD_USE_STATIC_BUF
 		MFREE(osh, bus->rxbuf, bus->rxblen);
 #endif
 		bus->rxctl = bus->rxbuf = NULL;
@@ -5748,7 +5748,7 @@ dhdsdio_release_malloc(dhd_bus_t *bus, osl_t *osh)
 	}
 
 	if (bus->databuf) {
-#ifndef DHD_USE_STATIC_BUF
+#ifndef CONFIG_DHD_USE_STATIC_BUF
 		MFREE(osh, bus->databuf, MAX_DATA_BUF);
 #endif
 		bus->databuf = NULL;

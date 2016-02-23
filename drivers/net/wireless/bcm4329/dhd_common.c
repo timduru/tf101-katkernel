@@ -524,9 +524,11 @@ dhd_ioctl(dhd_pub_t *dhd_pub, dhd_ioctl_t *ioc, void *buf, uint buflen)
 static void
 wl_show_host_event(wl_event_msg_t *event, void *event_data)
 {
-	uint i, status, reason;
-	bool group = FALSE, flush_txq = FALSE, link = FALSE;
-	char *auth_str, *event_name;
+	uint i, status;
+//	uint  reason;
+//	bool group = FALSE, flush_txq = FALSE, link = FALSE;
+//	char *auth_str;
+	char *event_name;
 	uchar *buf;
 	char err_msg[256], eabuf[ETHER_ADDR_STR_LEN];
 	static struct {uint event; char *event_name;} event_names[] = {
@@ -587,11 +589,12 @@ wl_show_host_event(wl_event_msg_t *event, void *event_data)
 		{WLC_E_RSSI, "RSSI"},
 		{WLC_E_PFN_SCAN_COMPLETE, "SCAN_COMPLETE"}
 	};
-	uint event_type, flags, auth_type, datalen;
+	uint event_type,  auth_type, datalen;
+//	uint flags;
 	event_type = ntoh32(event->event_type);
-	flags = ntoh16(event->flags);
+//	flags = ntoh16(event->flags);
 	status = ntoh32(event->status);
-	reason = ntoh32(event->reason);
+//	reason = ntoh32(event->reason);
 	auth_type = ntoh32(event->auth_type);
 	datalen = ntoh32(event->datalen);
 	/* debug dump of event messages */
@@ -611,12 +614,12 @@ wl_show_host_event(wl_event_msg_t *event, void *event_data)
 
 	DHD_EVENT(("EVENT: %s, event ID = %d\n", event_name, event_type));
 
-	if (flags & WLC_EVENT_MSG_LINK)
-		link = TRUE;
-	if (flags & WLC_EVENT_MSG_GROUP)
-		group = TRUE;
-	if (flags & WLC_EVENT_MSG_FLUSHTXQ)
-		flush_txq = TRUE;
+//	if (flags & WLC_EVENT_MSG_LINK)
+//		link = TRUE;
+//	if (flags & WLC_EVENT_MSG_GROUP)
+//		group = TRUE;
+//	if (flags & WLC_EVENT_MSG_FLUSHTXQ)
+//		flush_txq = TRUE;
 
 	switch (event_type) {
 	case WLC_E_START:
@@ -652,13 +655,13 @@ wl_show_host_event(wl_event_msg_t *event, void *event_data)
 
 	case WLC_E_AUTH:
 	case WLC_E_AUTH_IND:
-		if (auth_type == DOT11_OPEN_SYSTEM)
-			auth_str = "Open System";
-		else if (auth_type == DOT11_SHARED_KEY)
-			auth_str = "Shared Key";
-		else {
+		if (auth_type == DOT11_OPEN_SYSTEM) {
+			//auth_str = "Open System";
+		} else if (auth_type == DOT11_SHARED_KEY) {
+			//auth_str = "Shared Key";
+		} else {
 			sprintf(err_msg, "AUTH unknown: %d", (int)auth_type);
-			auth_str = err_msg;
+			//auth_str = err_msg;
 		}
 		if (event_type == WLC_E_AUTH_IND) {
 			DHD_EVENT(("MACEVENT: %s, MAC %s, %s\n", event_name, eabuf, auth_str));
@@ -818,8 +821,9 @@ wl_host_event(struct dhd_info *dhd, int *ifidx, void *pktdata,
 	/* check whether packet is a BRCM event pkt */
 	bcm_event_t *pvt_data = (bcm_event_t *)pktdata;
 	char *event_data;
-	uint32 type, status;
-	uint16 flags;
+	uint32 type;
+//	uint32  status;
+//	uint16 flags;
 	int evlen;
 
 	if (bcmp(BRCM_OUI, &pvt_data->bcm_hdr.oui[0], DOT11_OUI_LEN)) {
@@ -840,8 +844,8 @@ wl_host_event(struct dhd_info *dhd, int *ifidx, void *pktdata,
 	memcpy(event, &pvt_data->event, sizeof(wl_event_msg_t));
 
 	type = ntoh32_ua((void *)&event->event_type);
-	flags = ntoh16_ua((void *)&event->flags);
-	status = ntoh32_ua((void *)&event->status);
+//	flags = ntoh16_ua((void *)&event->flags);
+//	status = ntoh32_ua((void *)&event->status);
 	evlen = ntoh32_ua((void *)&event->datalen) + sizeof(bcm_event_t);
 
 	switch (type) {

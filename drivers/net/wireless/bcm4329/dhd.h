@@ -296,8 +296,6 @@ extern int  dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, u
 /* OS independent layer functions */
 extern int dhd_os_proto_block(dhd_pub_t * pub);
 extern int dhd_os_proto_unblock(dhd_pub_t * pub);
-extern int dhd_os_ioctl_block(dhd_pub_t * pub);
-extern int dhd_os_ioctl_unblock(dhd_pub_t * pub);
 extern int dhd_os_ioctl_resp_wait(dhd_pub_t * pub, uint * condition, bool * pending);
 extern int dhd_os_ioctl_resp_wake(dhd_pub_t * pub);
 extern unsigned int dhd_os_get_ioctl_resp_timeout(void);
@@ -318,8 +316,6 @@ extern int dhd_custom_get_mac_address(unsigned char *buf);
 extern void dhd_os_sdunlock_sndup_rxq(dhd_pub_t * pub);
 extern void dhd_os_sdlock_eventq(dhd_pub_t * pub);
 extern void dhd_os_sdunlock_eventq(dhd_pub_t * pub);
-extern bool dhd_os_check_hang(dhd_pub_t *dhdp, int ifidx, int ret);
-
 #ifdef DHD_DEBUG
 extern int write_to_file(dhd_pub_t *dhd, uint8 *buf, int size);
 #endif /* DHD_DEBUG */

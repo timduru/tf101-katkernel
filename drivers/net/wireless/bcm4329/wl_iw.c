@@ -95,7 +95,7 @@ typedef const struct si_pub  si_t;
 #define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS  1
 
 #if defined(SOFTAP)
-#define WL_SOFTAP(x) printf x
+#define WL_SOFTAP(x) printk x
 static struct net_device *priv_dev;
 static bool ap_cfg_running = FALSE;
 bool ap_fw_loaded = FALSE;
@@ -105,6 +105,12 @@ struct semaphore  ap_eth_sema;
 static struct completion ap_cfg_exited;
 static int wl_iw_set_ap_security(struct net_device *dev, struct ap_profile *ap);
 static int wl_iw_softap_deassoc_stations(struct net_device *dev, u8 *mac);
+#endif
+#define WL_IW_AUTO_TXPOWER_ADJ
+#ifdef WL_IW_AUTO_TXPOWER_ADJ
+static int iw_link_state_changed = 0;
+static int default_tx_power = 0;
+static int iw_link_state = 0;
 #endif
 
 #define WL_IW_IOCTL_CALL(func_call) \
@@ -263,6 +269,9 @@ static void wl_iw_set_event_mask(struct net_device *dev);
 static int
 wl_iw_iscan(iscan_info_t *iscan, wlc_ssid_t *ssid, uint16 action);
 #endif 
+
+extern unsigned int ASUSGetProjectID( void );
+
 static int
 wl_iw_set_scan(
 	struct net_device *dev,
@@ -1481,6 +1490,50 @@ exit_proc:
 }
 #endif
 
+#ifdef WL_IW_AUTO_TXPOWER_ADJ
+typedef enum wifi_link_mode {
+	WIFI_B_MODE = 1,
+	WIFI_G_MODE,
+	WIFI_N_MODE
+} wifi_link_mode_t;
+
+static int
+wl_iw_get_ch_info(struct net_device *dev, int *mode, int *channel)
+{
+	char bi_buf[256];
+	wl_bss_info_t *bi;
+
+	*(uint32*)bi_buf = htod32(WLC_IOCTL_SMLEN);
+
+	dev_wlc_ioctl(dev, WLC_GET_BSS_INFO, bi_buf,256);
+
+	bi = (wl_bss_info_t*)(bi_buf + 4);
+
+	if (dtoh32(bi->version) != WL_BSS_INFO_VERSION) {
+		WL_ERROR(("can't get bi info!\n"));
+		return -1;
+	}
+
+	/* check the bss info */
+	/* get channel */
+	*channel = (bi->ctl_ch == 0) ? CHSPEC_CHANNEL(bi->chanspec) : bi->ctl_ch;
+	WL_TRACE(("get channel = %d\n", *channel));
+
+	/* get mode b/g/n */
+	if (dtoh32(bi->rateset.count) <= 4) {
+		WL_TRACE(("b only mode\n"));
+		*mode = WIFI_B_MODE;
+	} else if (bi->ctl_ch) {
+		WL_TRACE(("n mode\n"));
+		*mode = WIFI_N_MODE;
+	} else {
+		WL_TRACE(("g mode\n"));
+		*mode = WIFI_G_MODE;
+	}
+
+	return 0;
+}
+#endif
 static int
 wl_iw_get_rssi(
 	struct net_device *dev,
@@ -1524,6 +1577,50 @@ wl_iw_get_rssi(
 	}
 	wrqu->data.length = p - extra + 1;
 
+#ifdef WL_IW_AUTO_TXPOWER_ADJ
+
+	if(ASUSGetProjectID() == 102) {
+		/* get default tx power value */
+		if (!default_tx_power) {
+			dev_wlc_intvar_get(dev, "qtxpower", &default_tx_power);
+			WL_TRACE(("default tx power is %d\n", default_tx_power));
+		}
+		if (iw_link_state_changed) {
+			int tw_power_set_value = default_tx_power;
+			int mode = 0;
+			int get_chan = 0;
+			/* check link up or link down */
+			if (iw_link_state == 0) {
+				/* link down, set tx power to default value */
+				tw_power_set_value = default_tx_power;
+			} else {
+				/* link up, check channel */
+				if (wl_iw_get_ch_info(dev, &mode, &get_chan) != 0)
+					goto end;
+
+				if (mode == WIFI_B_MODE) {
+					if (get_chan < 11) {
+						tw_power_set_value = 60;
+					} else {
+						tw_power_set_value = 52;
+					}
+				} else if (mode == WIFI_G_MODE) {
+					tw_power_set_value = 52;
+				} else if (mode == WIFI_N_MODE) {
+					tw_power_set_value = 52;
+				}
+
+			}
+
+			WL_TRACE(("set tx power to 0x%x\n", tw_power_set_value));
+			tw_power_set_value |= WL_TXPWR_OVERRIDE;
+			dev_wlc_intvar_set(dev, "qtxpower", tw_power_set_value);
+		}
+end:
+		iw_link_state_changed = 0;
+
+	}
+#endif
 	net_os_wake_unlock(dev);
 	return error;
 }
@@ -1547,7 +1644,7 @@ wl_iw_send_priv_event(
 	wrqu.data.length = strlen(extra);
 	wireless_send_event(dev, cmd, &wrqu, extra);
 	net_os_wake_lock_timeout_enable(dev);
-	WL_ERROR(("Send IWEVCUSTOM Event as %s\n", extra));
+	WL_TRACE(("Send IWEVCUSTOM Event as %s\n", extra));
 
 	return 0;
 }
@@ -1606,7 +1703,7 @@ wl_iw_control_wl_off(
 {
 	int ret = 0;
 	wl_iw_t *iw;
-	mdelay(500);
+
 	WL_TRACE(("Enter %s\n", __FUNCTION__));
 
 	if (!dev) {
@@ -5109,6 +5206,7 @@ wl_iw_set_pmksa(
 	uint i;
 	int ret = 0;
 	char eabuf[ETHER_ADDR_STR_LEN];
+	pmkid_t * pmkid_array = pmkid_list.pmkids.pmkid;
 
 	WL_WSEC(("%s: SIOCSIWPMKSA\n", dev->name));
 	CHECK_EXTRA_FOR_NULL(extra);
@@ -5139,18 +5237,18 @@ wl_iw_set_pmksa(
 		}
 
 		for (i = 0; i < pmkid_list.pmkids.npmkid; i++)
-			if (!bcmp(&iwpmksa->bssid.sa_data[0], &pmkid_list.pmkids.pmkid[i].BSSID,
+			if (!bcmp(&iwpmksa->bssid.sa_data[0], &pmkid_array[i].BSSID,
 				ETHER_ADDR_LEN))
 				break;
 
 		if ((pmkid_list.pmkids.npmkid > 0) && (i < pmkid_list.pmkids.npmkid)) {
-			bzero(&pmkid_list.pmkids.pmkid[i], sizeof(pmkid_t));
+			bzero(&pmkid_array[i], sizeof(pmkid_t));
 			for (; i < (pmkid_list.pmkids.npmkid - 1); i++) {
-				bcopy(&pmkid_list.pmkids.pmkid[i+1].BSSID,
-					&pmkid_list.pmkids.pmkid[i].BSSID,
+				bcopy(&pmkid_array[i+1].BSSID,
+					&pmkid_array[i].BSSID,
 					ETHER_ADDR_LEN);
-				bcopy(&pmkid_list.pmkids.pmkid[i+1].PMKID,
-					&pmkid_list.pmkids.pmkid[i].PMKID,
+				bcopy(&pmkid_array[i+1].PMKID,
+					&pmkid_array[i].PMKID,
 					WPA2_PMKID_LEN);
 			}
 			pmkid_list.pmkids.npmkid--;
@@ -5161,14 +5259,14 @@ wl_iw_set_pmksa(
 
 	else if (iwpmksa->cmd == IW_PMKSA_ADD) {
 		for (i = 0; i < pmkid_list.pmkids.npmkid; i++)
-			if (!bcmp(&iwpmksa->bssid.sa_data[0], &pmkid_list.pmkids.pmkid[i].BSSID,
+			if (!bcmp(&iwpmksa->bssid.sa_data[0], &pmkid_array[i].BSSID,
 				ETHER_ADDR_LEN))
 				break;
 		if (i < MAXPMKID) {
 			bcopy(&iwpmksa->bssid.sa_data[0],
-				&pmkid_list.pmkids.pmkid[i].BSSID,
+				&pmkid_array[i].BSSID,
 				ETHER_ADDR_LEN);
-			bcopy(&iwpmksa->pmkid[0], &pmkid_list.pmkids.pmkid[i].PMKID,
+			bcopy(&iwpmksa->pmkid[0], &pmkid_array[i].PMKID,
 				WPA2_PMKID_LEN);
 			if (i == pmkid_list.pmkids.npmkid)
 				pmkid_list.pmkids.npmkid++;
@@ -5181,10 +5279,10 @@ wl_iw_set_pmksa(
 			uint k;
 			k = pmkid_list.pmkids.npmkid;
 			WL_WSEC(("wl_iw_set_pmksa,IW_PMKSA_ADD - PMKID: %s = ",
-				bcm_ether_ntoa(&pmkid_list.pmkids.pmkid[k].BSSID,
+				bcm_ether_ntoa(&pmkid_array[k].BSSID,
 				eabuf)));
 			for (j = 0; j < WPA2_PMKID_LEN; j++)
-				WL_WSEC(("%02x ", pmkid_list.pmkids.pmkid[k].PMKID[j]));
+				WL_WSEC(("%02x ", pmkid_array[k].PMKID[j]));
 			WL_WSEC(("\n"));
 		}
 	}
@@ -5192,10 +5290,10 @@ wl_iw_set_pmksa(
 	for (i = 0; i < pmkid_list.pmkids.npmkid; i++) {
 		uint j;
 		WL_WSEC(("PMKID[%d]: %s = ", i,
-			bcm_ether_ntoa(&pmkid_list.pmkids.pmkid[i].BSSID,
+			bcm_ether_ntoa(&pmkid_array[i].BSSID,
 			eabuf)));
 		for (j = 0; j < WPA2_PMKID_LEN; j++)
-			WL_WSEC(("%02x ", pmkid_list.pmkids.pmkid[i].PMKID[j]));
+			WL_WSEC(("%02x ", pmkid_array[i].PMKID[j]));
 		WL_WSEC(("\n"));
 	}
 	WL_WSEC(("\n"));
@@ -7236,27 +7334,39 @@ static int wl_iw_set_priv(
 			ret = wl_iw_set_pno_enable(dev, info, (union iwreq_data *)dwrq, extra);
 #endif
 #if defined(CSCAN)
-	    else if (strnicmp(extra, CSCAN_COMMAND, strlen(CSCAN_COMMAND)) == 0)
+		else if (strnicmp(extra, CSCAN_COMMAND, strlen(CSCAN_COMMAND)) == 0)
 			ret = wl_iw_set_cscan(dev, info, (union iwreq_data *)dwrq, extra);
-#endif 
+#endif
 #ifdef CUSTOMER_HW2
 		else if (strnicmp(extra, "POWERMODE", strlen("POWERMODE")) == 0)
 			ret = wl_iw_set_power_mode(dev, info, (union iwreq_data *)dwrq, extra);
-	    else if (strnicmp(extra, "BTCOEXMODE", strlen("BTCOEXMODE")) == 0) {
+		else if (strnicmp(extra, "BTCOEXMODE", strlen("BTCOEXMODE")) == 0) {
 			WL_TRACE_COEX(("%s:got Framwrork cmd: 'BTCOEXMODE'\n", __FUNCTION__));
 			ret = wl_iw_set_btcoex_dhcp(dev, info, (union iwreq_data *)dwrq, extra);
-	    }
+		}
 #else
 		else if (strnicmp(extra, "POWERMODE", strlen("POWERMODE")) == 0)
 			ret = wl_iw_set_btcoex_dhcp(dev, info, (union iwreq_data *)dwrq, extra);
 #endif
 		else if (strnicmp(extra, "GETPOWER", strlen("GETPOWER")) == 0)
 			ret = wl_iw_get_power_mode(dev, info, (union iwreq_data *)dwrq, extra);
+		else if (strnicmp(extra, RXFILTER_START_CMD, strlen(RXFILTER_START_CMD)) == 0)
+			ret = net_os_set_packet_filter(dev, 1);
+		else if (strnicmp(extra, RXFILTER_STOP_CMD, strlen(RXFILTER_STOP_CMD)) == 0)
+			ret = net_os_set_packet_filter(dev, 0);
+//		else if (strnicmp(extra, RXFILTER_ADD_CMD, strlen(RXFILTER_ADD_CMD)) == 0) {
+//			int filter_num = *(extra + strlen(RXFILTER_ADD_CMD) + 1) - '0';
+//			ret = net_os_rxfilter_add_remove(dev, TRUE, filter_num);
+//		}
+//		else if (strnicmp(extra, RXFILTER_REMOVE_CMD, strlen(RXFILTER_REMOVE_CMD)) == 0) {
+//			int filter_num = *(extra + strlen(RXFILTER_REMOVE_CMD) + 1) - '0';
+//			ret = net_os_rxfilter_add_remove(dev, FALSE, filter_num);
+//		}
 #ifdef SOFTAP
 #ifdef SOFTAP_TLV_CFG
 		else if (strnicmp(extra, SOFTAP_SET_CMD, strlen(SOFTAP_SET_CMD)) == 0) {
 		    wl_iw_softap_cfg_tlv(dev, info, (union iwreq_data *)dwrq, extra);
-	    }
+		}
 #endif
 		else if (strnicmp(extra, "ASCII_CMD", strlen("ASCII_CMD")) == 0) {
 			wl_iw_process_private_ascii_cmd(dev, info, (union iwreq_data *)dwrq, extra);
@@ -7852,9 +7962,12 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 		break;
 	case WLC_E_ROAM:
 		if (status == WLC_E_STATUS_SUCCESS) {
-			memcpy(wrqu.addr.sa_data, &e->addr.octet, ETHER_ADDR_LEN);
-			wrqu.addr.sa_family = ARPHRD_ETHER;
-			cmd = SIOCGIWAP;
+			WL_ASSOC(("%s: WLC_E_ROAM: success\n", __FUNCTION__));
+#if defined(ROAM_NOT_USED)
+			roam_no_success_send = FALSE;
+			roam_no_success = 0;
+#endif
+			goto wl_iw_event_end;
 		}
 #if defined(ROAM_NOT_USED)
 		else if (status == WLC_E_STATUS_NO_NETWORKS) {
@@ -7902,6 +8015,10 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 			} else {
 				WL_TRACE(("STA_Link Down\n"));
 				g_ss_cache_ctrl.m_link_down = 1;
+#ifdef WL_IW_AUTO_TXPOWER_ADJ
+				iw_link_state = 0;
+				iw_link_state_changed = 1;
+#endif
 			}
 #else
 			g_ss_cache_ctrl.m_link_down = 1;
@@ -7927,6 +8044,10 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 				wl_iw_send_priv_event(priv_dev, "AP_UP");
 			} else {
 				WL_TRACE(("STA_LINK_UP\n"));
+#ifdef WL_IW_AUTO_TXPOWER_ADJ
+				iw_link_state = 1;
+				iw_link_state_changed = 1;
+#endif
 #if defined(ROAM_NOT_USED)
 				roam_no_success_send = FALSE;
 				roam_no_success = 0;
@@ -8058,7 +8179,6 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 #endif
 
 #if WIRELESS_EXT > 14
-	
 	memset(extra, 0, sizeof(extra));
 	if (wl_iw_check_conn_fail(e, extra, sizeof(extra))) {
 		cmd = IWEVCUSTOM;

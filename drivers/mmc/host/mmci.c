@@ -640,7 +640,24 @@ static int mmci_pio_read(struct mmci_host *host, char *buffer, unsigned int rema
 		if (count <= 0)
 			break;
 
-		readsl(base + MMCIFIFO, ptr, count >> 2);
+		/*
+		 * SDIO especially may want to send something that is
+		 * not divisible by 4 (as opposed to card sectors
+		 * etc). Therefore make sure to always read the last bytes
+		 * while only doing full 32-bit reads towards the FIFO.
+		 */
+		if (unlikely(count & 0x3)) {
+			if (count < 4) {
+				unsigned char buf[4];
+				readsl(base + MMCIFIFO, buf, 1);
+				memcpy(ptr, buf, count);
+			} else {
+				readsl(base + MMCIFIFO, ptr, count >> 2);
+				count &= ~0x3;
+			}
+		} else {
+			readsl(base + MMCIFIFO, ptr, count >> 2);
+		}
 
 		ptr += count;
 		remain -= count;
@@ -1104,12 +1121,13 @@ static int __devinit mmci_probe(struct amba_device *dev,
 	/*
 	 * Block size can be up to 2048 bytes, but must be a power of two.
 	 */
-	mmc->max_blk_size = 2048;
+	mmc->max_blk_size = 1 << 11;
 
 	/*
-	 * No limit on the number of blocks transferred.
+	 * Limit the number of blocks transferred so that we don't overflow
+	 * the maximum request size.
 	 */
-	mmc->max_blk_count = mmc->max_req_size;
+	mmc->max_blk_count = mmc->max_req_size >> 11;
 
 	spin_lock_init(&host->lock);
 

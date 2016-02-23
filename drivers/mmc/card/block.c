@@ -753,6 +753,29 @@ static const struct mmc_fixup blk_fixups[] =
 {
 	MMC_FIXUP("SEM16G", 0x2, 0x100, add_quirk, MMC_QUIRK_INAND_CMD38),
 	MMC_FIXUP("SEM32G", 0x2, 0x100, add_quirk, MMC_QUIRK_INAND_CMD38),
+
+	/*
+	 * Some MMC cards experience performance degradation with CMD23
+	 * instead of CMD12-bounded multiblock transfers. For now we'll
+	 * black list what's bad...
+	 * - Certain Toshiba cards.
+	 *
+	 * N.B. This doesn't affect SD cards.
+	 */
+	MMC_FIXUP("MMC08G", 0x11, CID_OEMID_ANY, add_quirk,
+		  MMC_QUIRK_BLK_NO_CMD23),
+	MMC_FIXUP("MMC16G", 0x11, CID_OEMID_ANY, add_quirk,
+		  MMC_QUIRK_BLK_NO_CMD23),
+	MMC_FIXUP("MMC32G", 0x11, CID_OEMID_ANY, add_quirk,
+		  MMC_QUIRK_BLK_NO_CMD23),
+
+	/*
+	 * Some Micron MMC cards needs longer data read timeout than
+	 * indicated in CSD.
+	 */
+	MMC_FIXUP(CID_NAME_ANY, 0x13, 0x200, add_quirk,
+		  MMC_QUIRK_LONG_READ_TIME),
+
 	END_FIXUP
 };
 

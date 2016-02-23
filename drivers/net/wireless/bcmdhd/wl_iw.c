@@ -1626,7 +1626,7 @@ wl_iw_send_priv_event(
 	strcpy(extra, flag);
 	wrqu.data.length = strlen(extra);
 	wireless_send_event(dev, cmd, &wrqu, extra);
-	net_os_wake_lock_timeout_enable(dev, DHD_EVENT_TIMEOUT);
+	net_os_wake_lock_timeout_enable(dev, DHD_EVENT_TIMEOUT_MS);
 	WL_TRACE(("Send IWEVCUSTOM Event as %s\n", extra));
 
 	return 0;
@@ -1738,7 +1738,6 @@ wl_iw_control_wl_off(
 		sdioh_stop(NULL);
 #endif
 
-		
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
 
 		wl_iw_send_priv_event(dev, "STOP");
@@ -6912,7 +6911,7 @@ wl_iw_set_ap_security(struct net_device *dev, struct ap_profile *ap)
 				        (uint)output[i*4+3]);
 				ptr += 8;
 			}
-			printf("%s: passphase = %s\n", __FUNCTION__, key_str_buf);
+			printk("%s: passphase = %s\n", __FUNCTION__, key_str_buf);
 
 			psk.key_len = htod16((ushort)WSEC_MAX_PSK_LEN);
 			memcpy(psk.key, key_str_buf, psk.key_len);
@@ -8214,7 +8213,6 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 			WL_TRACE(("Link UP\n"));
 
 		}
-		net_os_wake_lock_timeout_enable(dev, DHD_EVENT_TIMEOUT);
 		wrqu.addr.sa_family = ARPHRD_ETHER;
 		break;
 	case WLC_E_ACTION_FRAME:
@@ -8315,7 +8313,6 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 		WL_ERROR(("%s Event WLC_E_PFN_NET_FOUND, send %s up : find %s len=%d\n",
 		   __FUNCTION__, PNO_EVENT_UP, netinfo->pfnsubnet.SSID,
 		   netinfo->pfnsubnet.SSID_len));
-		net_os_wake_lock_timeout_enable(dev, DHD_EVENT_TIMEOUT);
 		cmd = IWEVCUSTOM;
 		memset(&wrqu, 0, sizeof(wrqu));
 		strcpy(extra, PNO_EVENT_UP);

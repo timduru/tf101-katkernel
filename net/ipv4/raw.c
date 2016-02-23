@@ -548,22 +548,13 @@ static int raw_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	}
 
 	{
-		struct flowi4 fl4 = {
-			.flowi4_oif = ipc.oif,
-			.flowi4_mark = sk->sk_mark,
-			.daddr = daddr,
-			.saddr = saddr,
-			.flowi4_tos = tos,
-			.flowi4_proto = (inet->hdrincl ?
-					 IPPROTO_RAW :
-					 sk->sk_protocol),
-			.flowi4_flags = FLOWI_FLAG_CAN_SLEEP,
-		};
-		if (!inet->hdrincl) {
-			err = raw_probe_proto_opt(&fl4, msg);
-			if (err)
-				goto done;
-		}
+ struct flowi4 fl4;
+	flowi4_init_output(&fl4, ipc.oif, sk->sk_mark, tos,
+			   RT_SCOPE_UNIVERSE,
+			   inet->hdrincl ? IPPROTO_RAW : sk->sk_protocol,
+			   inet_sk_flowi_flags(sk) | FLOWI_FLAG_CAN_SLEEP,
+			   daddr, saddr, 0, 0,
+			   sock_i_uid(sk));
 
 		security_sk_classify_flow(sk, flowi4_to_flowi(&fl4));
 		rt = ip_route_output_flow(sock_net(sk), &fl4, sk);

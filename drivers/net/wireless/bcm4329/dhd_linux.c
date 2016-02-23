@@ -67,7 +67,7 @@
 static struct wifi_platform_data *wifi_control_data = NULL;
 #endif
 
-static int ioctl_erro_cnt = 0;
+int error_count = 0;
 
 struct semaphore wifi_control_sem;
 
@@ -294,7 +294,6 @@ typedef struct dhd_info {
 	/* OS/stack specifics */
 	dhd_if_t *iflist[DHD_MAX_IFS];
 
-	struct mutex ioctl_sem;
 	struct mutex proto_sem;
 	wait_queue_head_t ioctl_resp_wait;
 	struct timer_list timer;
@@ -742,18 +741,6 @@ dhd_net2idx(dhd_info_t *dhd, struct net_device *net)
 	}
 
 	return DHD_BAD_IF;
-}
-
-struct net_device * dhd_idx2net(struct dhd_pub *dhd_pub, int ifidx)
-{
-	struct dhd_info *dhd_info;
-
-	if (!dhd_pub || ifidx < 0 || ifidx >= DHD_MAX_IFS)
-		return NULL;
-	dhd_info = dhd_pub->info;
-	if (dhd_info && dhd_info->iflist[ifidx])
-		return dhd_info->iflist[ifidx]->net;
-	return NULL;
 }
 
 int
@@ -1280,14 +1267,15 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt)
 	struct sk_buff *skb;
 	uchar *eth;
 	uint len;
-	void * data, *pnext, *save_pktbuf;
+	void * data, *pnext;
+//	void *save_pktbuf;
 	int i;
 	dhd_if_t *ifp;
 	wl_event_msg_t event;
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
-	save_pktbuf = pktbuf;
+//	save_pktbuf = pktbuf;
 
 	for (i = 0; pktbuf && i < numpkt; i++, pktbuf = pnext) {
 
@@ -1780,38 +1768,6 @@ dhd_ethtool(dhd_info_t *dhd, void *uaddr)
 }
 #endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 4, 2) */
 
-static bool dhd_check_hang(struct net_device *net, dhd_pub_t *dhdp, int error)
-{
-	if (!dhdp)
-		return FALSE;
-
-	if ((error == -ETIMEDOUT) || (error == -EIO) || ((dhdp->busstate == DHD_BUS_DOWN) &&
-		(!dhdp->dongle_reset))) {
-		if (ioctl_erro_cnt < 3) {
-			ioctl_erro_cnt++;
-			printf("%s: ioctl error = %d, ioctl_error_cnt = %d\n", __FUNCTION__, error, ioctl_erro_cnt);
-		} else {
-			printf("%s: Event HANG send up, error = %d\n", __FUNCTION__,error);
-			ioctl_erro_cnt = 0;
-			net_os_send_hang_message(net);
-		}
-		return TRUE;
-
-	} else if (ioctl_erro_cnt > 0) {
-		ioctl_erro_cnt --;
-		printf("%s: ioctl success, ioctl_error_cnt = %d\n", __FUNCTION__, ioctl_erro_cnt);
-	}
-	return FALSE;
-}
-
-bool dhd_os_check_hang(dhd_pub_t *dhdp, int ifidx, int ret)
-{
-	struct net_device *net;
-
-	net = dhd_idx2net(dhdp, ifidx);
-	return dhd_check_hang(net, dhdp, ret);
-}
-
 static int
 dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 {
@@ -1934,9 +1890,24 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 	}
 
 	bcmerror = dhd_prot_ioctl(&dhd->pub, ifidx, (wl_ioctl_t *)&ioc, buf, buflen);
+	if (bcmerror == -ETIMEDOUT){
+		printf("%s: Event timeout, retry again.\n", __FUNCTION__);
+		bcmerror = dhd_prot_ioctl(&dhd->pub, ifidx, (wl_ioctl_t *)&ioc, buf, buflen);
+	}
 
 done:
-	dhd_check_hang(net, &dhd->pub, bcmerror);
+	if ((bcmerror == -ETIMEDOUT) || ((dhd->pub.busstate == DHD_BUS_DOWN) &&
+			(!dhd->pub.dongle_reset))) {
+		error_count++;
+		printf("%s: bcmerror = %d, error_count = %d\n", __FUNCTION__,bcmerror,error_count);
+		if(error_count > 3){
+			printf("%s: Event HANG send up\n", __FUNCTION__);
+			net_os_send_hang_message(net);
+			error_count = 0;
+		}
+	}else{
+		error_count = 0;
+	}
 
 	if (!bcmerror && buf && ioc.buf) {
 		if (copy_to_user(ioc.buf, buf, buflen))
@@ -2145,7 +2116,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	net->netdev_ops = NULL;
 #endif
 
-	mutex_init(&dhd->ioctl_sem);
 	mutex_init(&dhd->proto_sem);
 	/* Initialize other structure content */
 	init_waitqueue_head(&dhd->ioctl_resp_wait);
@@ -2783,32 +2753,6 @@ dhd_os_proto_unblock(dhd_pub_t *pub)
 
 	if (dhd) {
 		mutex_unlock(&dhd->proto_sem);
-		return 1;
-	}
-
-	return 0;
-}
-
-int
-dhd_os_ioctl_block(dhd_pub_t *pub)
-{
-	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
-
-	if (dhd) {
-		mutex_lock(&dhd->ioctl_sem);
-		return 1;
-	}
-
-	return 0;
-}
-
-int
-dhd_os_ioctl_unblock(dhd_pub_t *pub)
-{
-	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
-
-	if (dhd) {
-		mutex_unlock(&dhd->ioctl_sem);
 		return 1;
 	}
 
